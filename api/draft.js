@@ -1,6 +1,10 @@
 // POST /api/draft  { questions: string[], prospect: string }
 // → { answers: [...] }  (see api/_lib/anthropic.js for the answer shape)
+//
+// Grounds Claude on the live Supabase library; falls back to the published Google
+// Doc / bundled library when Supabase isn't configured or is empty.
 
+import { getDbLibrary } from "./_lib/supabaseAdmin.js";
 import { getLibrary } from "./_lib/library.js";
 import { draftAnswers } from "./_lib/anthropic.js";
 
@@ -11,9 +15,7 @@ export default async function handler(req, res) {
   }
 
   if (!process.env.ANTHROPIC_API_KEY) {
-    return res
-      .status(400)
-      .json({ error: "ANTHROPIC_API_KEY is not configured on the server." });
+    return res.status(400).json({ error: "ANTHROPIC_API_KEY is not configured on the server." });
   }
 
   try {
@@ -22,12 +24,8 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Provide a non-empty 'questions' array." });
     }
 
-    const { text: library } = await getLibrary();
-    const answers = await draftAnswers({
-      questions,
-      prospect: prospect || "Unknown",
-      library,
-    });
+    const library = (await getDbLibrary()) || (await getLibrary()).text;
+    const answers = await draftAnswers({ questions, prospect: prospect || "Unknown", library });
 
     return res.status(200).json({ answers });
   } catch (err) {

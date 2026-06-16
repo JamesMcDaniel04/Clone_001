@@ -1,0 +1,52 @@
+# Clone — Data Model
+
+Postgres on Supabase. Full DDL is in [`supabase/migrations/0001_init.sql`](../supabase/migrations/0001_init.sql).
+Every content table has **Row-Level Security** enabled with a single policy: any authenticated user
+(gated to your domain at the Google-OAuth + app layer) may read/write. Tighten later if you add
+external collaborators.
+
+## Tables
+
+| Table | Purpose | Key columns |
+|---|---|---|
+| `profiles` | Mirror of `auth.users`, auto-created on signup by a trigger | `id` (=auth uid), `email`, `full_name`, `avatar_url`, `role` |
+| `categories` | Library categories (the Library Management rows) | `name`, `parent_id` (sub-categories), `next_review_cycle`, `reviewer_id` |
+| `library_entries` | The answer library — system of record (~1,200 entries) | `category_id`, `question`, `answer`, `status`, `tags[]`, `times_used`, `created_by/updated_by/reviewed_by`, `reviewed_at` |
+| `tags` | Reusable labels | `name` (unique) |
+| `merge_variables` | Reusable values for project answers | `name`, `type`, `value`, `comment`, `times_used` |
+| `projects` | A questionnaire / RFP being answered | `name`, `prospect`, `status`, `is_template`, `owner_id` |
+| `project_sections` | Outline: Sections → Subsections | `project_id`, `parent_section_id`, `name`, `instructions`, `position` |
+| `project_entries` | Questions + drafted answers within a project | `project_id`, `section_id`, `question`, `draft_answer`, `edited_answer`, `status`, `flag`, `flag_type`, `flag_reason`, `library_entries_used[]`, `reviewer_id` |
+
+## Status vocabularies
+
+- **`library_entries.status`** (Reviews queue) — `never_reviewed`, `unassigned`, `assigned`,
+  `approved_with_edits`, `approved_without_edits`. (Color dots in the UI come from `STATUS_DOT` in
+  `src/lib/theme.js`.)
+- **`project_entries.status`** — `draft`, `edited`, `approved`, `needs_legal`, `needs_engineering`,
+  `withheld`. Claude's `flag_type` maps here (`Needs engineering` → `needs_engineering`,
+  `No library match` → `withheld`, else `needs_legal`).
+- **`projects.status`** — `draft`, `in_review`, `legal_flagged`, `approved`, `sent`.
+
+## Relationships
+
+```
+profiles ──< categories.reviewer_id
+profiles ──< library_entries.{created_by,updated_by,reviewed_by}
+categories ──< library_entries.category_id
+projects ──< project_sections ──< project_entries
+projects ──< project_entries.project_id (direct, for flat questionnaires)
+```
+
+## Reviews
+
+The Reviews queue isn't its own table — it's a filtered query over `library_entries`
+(`src/lib/db.js` → `listReviews`) by category, status, and keyword. Approving an entry in Reviews
+sets `status` + `reviewed_at`.
+
+## How drafting reads the library
+
+`/api/draft` (server-side, service-role key) calls `getDbLibrary()`
+([`api/_lib/supabaseAdmin.js`](../api/_lib/supabaseAdmin.js)), which formats all answered
+`library_entries` grouped by category into the prompt context. If Supabase is unconfigured/empty it
+falls back to the bundled library in `api/_lib/library.js`.
