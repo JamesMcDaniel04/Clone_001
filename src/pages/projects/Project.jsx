@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { C } from "../../lib/theme.js";
-import { getProject, getProjectEntries, insertProjectEntries, updateProjectEntry, createEntry } from "../../lib/db.js";
-import { PageHeader, Button, Spinner, Modal, Field } from "../../components/ui.jsx";
+import { getProject, getProjectEntries, insertProjectEntries, updateProjectEntry, createEntry, listMergeVariables } from "../../lib/db.js";
+import { PageHeader, Button, Spinner } from "../../components/ui.jsx";
 import Stepper from "../../components/Stepper.jsx";
 import QuestionCard from "../../components/QuestionCard.jsx";
+import ImportModal from "../../components/ImportModal.jsx";
+import { buildResolver } from "../../lib/mergeVars.js";
 
 function parseQuestions(raw) {
   return raw.split(/\n+/).map((l) => l.replace(/^[\d]+[.)]\s*/, "").trim()).filter((l) => l.length > 10);
@@ -25,11 +27,16 @@ export default function Project() {
   const [err, setErr] = useState(null);
   const [importOpen, setImportOpen] = useState(false);
   const [exportMsg, setExportMsg] = useState(null);
+  const [mergeVars, setMergeVars] = useState([]);
 
   useEffect(() => {
     getProject(id).then(setProject).catch((e) => setErr(e.message));
     getProjectEntries(id).then(setEntries).catch((e) => setErr(e.message));
+    listMergeVariables().then(setMergeVars).catch(() => {});
   }, [id]);
+
+  // Resolve [[merge variable]] tokens against this project (client name, etc.).
+  const { resolve: resolveMV } = buildResolver(mergeVars, project);
 
   async function handleDraft() {
     const parsed = parseQuestions(raw);
@@ -87,7 +94,7 @@ export default function Project() {
 
   function exportTxt() {
     const approved = (entries || []).filter((q) => q.status === "approved");
-    const lines = approved.map((q, i) => `Q${i + 1}: ${q.question}\n\nA: ${q.edited_answer}\n\n${q.flag ? "⚠ FLAGGED: " + (q.flag_reason || "") + "\n" : ""}---`);
+    const lines = approved.map((q, i) => `Q${i + 1}: ${q.question}\n\nA: ${resolveMV(q.edited_answer)}\n\n${q.flag ? "⚠ FLAGGED: " + (q.flag_reason || "") + "\n" : ""}---`);
     const blob = new Blob([lines.join("\n\n")], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -144,27 +151,19 @@ export default function Project() {
             <Stat label="Flagged" value={flagged} tone="tan" />
           </div>
           {entries.map((q, i) => (
-            <QuestionCard key={q.id || i} q={q} idx={i} prospect={project.prospect} libraryLabel="Full library" onStatusChange={handleStatusChange} onAnswerEdit={handleAnswerEdit} onPromote={handlePromote} />
+            <QuestionCard key={q.id || i} q={q} idx={i} prospect={project.prospect} libraryLabel="Full library" resolve={resolveMV} onStatusChange={handleStatusChange} onAnswerEdit={handleAnswerEdit} onPromote={handlePromote} />
           ))}
         </div>
       )}
 
       {importOpen && (
-        <Modal title="Project Import" onClose={() => setImportOpen(false)} width={560}>
-          <div style={{ fontSize: 13, color: C.body, lineHeight: 1.6, marginBottom: 16 }}>
-            Bulk import from a Source Document or an Excel template is on the roadmap. For now, paste your questions
-            into the box (one per line) and hit <strong>Draft answers</strong> — Clone parses them automatically.
-          </div>
-          <Field label="Coming soon">
-            <div style={{ display: "flex", gap: 8 }}>
-              <Button disabled style={{ opacity: 0.5 }}>Source Document</Button>
-              <Button disabled style={{ opacity: 0.5 }}>Excel Template</Button>
-            </div>
-          </Field>
-          <div style={{ display: "flex", justifyContent: "flex-end" }}>
-            <Button variant="primary" onClick={() => setImportOpen(false)}>Got it</Button>
-          </div>
-        </Modal>
+        <ImportModal
+          onClose={() => setImportOpen(false)}
+          onImport={(qs) => {
+            setRaw((prev) => (prev.trim() ? prev.trim() + "\n" : "") + qs.join("\n"));
+            setImportOpen(false);
+          }}
+        />
       )}
     </div>
   );

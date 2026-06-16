@@ -1,67 +1,62 @@
-# Clone — security questionnaire tool
+# Clone — security questionnaire platform
 
-A lightweight alternative to Loopio for infosec/RFP questionnaires. Paste a vendor questionnaire,
-Clone drafts grounded answers with Claude against your curated answer library, reviewers
-approve / flag / edit, and you export approved answers — turning questionnaires around in well under
+A Loopio-style platform for infosec/RFP questionnaires. Maintain a reviewed answer **Library**,
+answer vendor questionnaires as **Projects** with Claude drafting grounded on that library, work a
+**Reviews** queue, and track everything in one place — turning questionnaires around in well under
 24 hours instead of days.
 
-## How it works
+## Information architecture
 
 ```
-Browser (React)  ──►  /api/draft     ──►  Claude (Opus 4.8, structured output)  ──► grounded answers
-                 ──►  /api/library   ──►  Google Doc (published to web)          ──► answer library
-                 ──►  /api/airtable  ──►  Airtable                               ──► history & flags
+Home      → My Project Tasks · My Reviews · Create a Project
+Projects  → list → project workspace (paste/import questions → AI draft → review/flag/edit → export)
+Reviews   → filterable queue over the library (category · status · keyword)
+Library   → Management (categories · entries) · Search · Merge Variables · Tags
 ```
-
-Secrets (Claude key, Airtable token, library URL) live **only** in serverless environment variables
-— never in the browser bundle. That's the reason for the small `api/` backend.
 
 ## Stack
 
-- **Frontend:** Vite + React (single review UI in `src/App.jsx`)
-- **Backend:** Vercel serverless functions in `api/`, using the official `@anthropic-ai/sdk`
-- **Model:** `claude-opus-4-8` by default (best accuracy for security/legal drafting). Set
-  `ANTHROPIC_MODEL=claude-sonnet-4-6` to cut cost ~40% / go faster — it's a one-line env change.
-- **Library:** a Google Doc published to web (edit answers without redeploying); a bundled fallback
-  ships in `api/_lib/library.js`.
+- **Frontend:** Vite + React + React Router (dark-navy platform chrome, warm editorial content)
+- **Backend:** Supabase (Postgres + Google auth + Row-Level Security) — system of record
+- **AI drafting:** Vercel serverless `/api/draft` using `@anthropic-ai/sdk`, **`claude-opus-4-8`**
+  by default (adaptive thinking + structured output), grounded on the live Supabase library. The
+  Anthropic key stays server-side. Set `ANTHROPIC_MODEL=claude-sonnet-4-6` for cheaper/faster.
+
+Secrets live in environment variables; the browser only ever sees the Supabase **anon** key (public
+by design, protected by RLS).
 
 ## Quick start
 
 ```bash
 npm install
-cp .env.example .env.local        # add at least ANTHROPIC_API_KEY
-npm i -g vercel && vercel dev      # runs UI + API together on http://localhost:3000
+cp .env.example .env.local      # Supabase URL + keys, Anthropic key, allowed domain
+# run supabase/migrations/0001_init.sql + supabase/seed.sql in the Supabase SQL editor
+npm i -g vercel && vercel dev   # UI + API on http://localhost:3000
 ```
 
-`npm run build` produces the static frontend; `npm run dev` runs the UI only (the `/api` calls need
-`vercel dev` or a deploy).
+Full walkthrough (Supabase project, Google OAuth, deploy, library import) →
+[`docs/SETUP.md`](docs/SETUP.md). Data model → [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md).
 
-Full walkthrough — Google Doc, Airtable, deploy, optional auth gate — in
-[`docs/SETUP.md`](docs/SETUP.md).
+## What's built vs. roadmap
 
-## What it does
+**Built:** Google auth gate · Home · Library Management (categories, entries, search, merge
+variables, tags) · Reviews queue with filters · Projects (create, parse questions, AI drafting,
+review/flag/edit/approve, promote to library, `.txt` export).
 
-- **Grounded drafting** — Claude answers strictly from the library; unsupported questions are
-  withheld, not guessed.
-- **Automatic flagging** — FedRAMP, single-tenant, ITAR/IL4/IL5/CMMC, on-prem, and non-US hosting
-  are flagged for legal/engineering sign-off and routed via Airtable.
-- **Structured output** — answers come back as validated JSON (no brittle parsing).
-- **Review UI** — approve / flag / edit inline; promote good answers back into the library.
-- **Export** — approved answers to `.txt` for pasting into your questionnaire template.
+**Roadmap:** Excel/source-doc import parsing · template publish/versioning · realtime collaboration ·
+merge-variable substitution into drafts · review notifications · usage analytics · bulk CSV import UI.
 
 ## Repo layout
 
 | Path | Purpose |
 |---|---|
-| `src/App.jsx` | Review UI |
-| `api/draft.js` | Claude drafting endpoint |
-| `api/library.js` | Serves the library + its source (Drive vs fallback) |
-| `api/airtable.js` | Airtable create/update proxy |
-| `api/_lib/anthropic.js` | Claude client, system rules, output schema |
-| `api/_lib/library.js` | Google Doc fetch + bundled fallback library |
-| `docs/` | `SYSTEM_PROMPT.md`, `AIRTABLE_SCHEMA.md`, `SETUP.md` |
+| `src/pages/` | Home, Projects, Reviews, Library pages |
+| `src/components/` | TopNav, shared UI, Stepper, QuestionCard |
+| `src/lib/` | `supabaseClient`, `db` (data access), `theme` |
+| `src/auth/` | Session provider + domain-gated route guard |
+| `api/draft.js` + `api/_lib/` | Claude drafting, grounded on Supabase |
+| `supabase/` | Schema migration + seed |
+| `docs/` | `SETUP.md`, `DATA_MODEL.md`, `AIRTABLE_SCHEMA.md` (superseded) |
 
-## Notes
-
-- The seed library reflects an example security posture — edit it in your Google Doc.
-- "Clone" is a working name; rename freely in `index.html` and `src/App.jsx`.
+"Clone" is a working name — rename freely in `index.html`, `src/components/TopNav.jsx`, and
+`src/pages/Login.jsx`.

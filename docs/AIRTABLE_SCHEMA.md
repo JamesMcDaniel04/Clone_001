@@ -1,5 +1,9 @@
 # Airtable Schema — Clone
 
+> ⚠️ **Superseded.** The platform now uses **Supabase (Postgres)** as its system of record — see
+> [`DATA_MODEL.md`](DATA_MODEL.md) and `supabase/migrations/0001_init.sql`. This Airtable schema is
+> kept only as historical reference from the Phase-0 prototype; the app no longer writes to Airtable.
+
 ## Base name: `Security Questionnaires`
 
 Create one base with the four tables below. The app writes to them through the

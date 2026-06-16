@@ -17,6 +17,7 @@ Rules:
 4. Match the format. If the question is yes/no, lead with "Yes" or "No", then elaborate. If open-ended, write 2-4 sentences.
 5. Cite your source. End each grounded answer with a parenthetical: "(Source: <library entry name>, last updated <date>)".
 6. If a question cannot be answered from the library, set "draft_answer" to null, "flag" to true, and "flag_type" to "No library match".
+7. Preserve merge-variable placeholders. If a library entry contains a placeholder in [[double brackets]] (e.g. [[Client Name]]), keep it verbatim in your answer — it is filled in per project when the answer is used.
 
 For each question return:
 - question_id: the question's id (e.g. "Q1"), echoing the input numbering.

@@ -5,10 +5,15 @@ import { IconShield, IconBook, IconCheck } from "./icons.jsx";
 // Renders one project entry: question, gap/library pills, Claude draft, flag
 // callout, and the review controls (status + edit + promote). Ports the Phase-0
 // review card. q = project_entries row; callbacks persist to Supabase.
-export default function QuestionCard({ q, idx, prospect, libraryLabel, onStatusChange, onAnswerEdit, onPromote }) {
+export default function QuestionCard({ q, idx, prospect, libraryLabel, resolve, onStatusChange, onAnswerEdit, onPromote }) {
   const [editing, setEditing] = useState(false);
   const [answer, setAnswer] = useState(q.edited_answer || q.draft_answer || "");
   const [promoted, setPromoted] = useState(false);
+
+  // Tokens like [[Client Name]] are stored raw (reusable) and resolved on display.
+  const rawAnswer = q.edited_answer || q.draft_answer || "";
+  const shownAnswer = resolve ? resolve(rawAnswer) : rawAnswer;
+  const mvApplied = shownAnswer !== rawAnswer;
 
   const statusColors = {
     draft: "#F3F4F2", edited: "#EAF1FB", approved: C.greenSoft,
@@ -48,7 +53,12 @@ export default function QuestionCard({ q, idx, prospect, libraryLabel, onStatusC
       )}
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
-        <div style={{ fontSize: 12.5, color: C.muted, fontWeight: 600 }}>Claude draft</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 12.5, color: C.muted, fontWeight: 600 }}>Claude draft</span>
+          {mvApplied && !editing && (
+            <span style={{ fontSize: 11, color: C.blueInk, background: C.blueSoft, borderRadius: 6, padding: "1px 7px", fontWeight: 600 }}>merge variables applied</span>
+          )}
+        </div>
         <div style={{ fontSize: 12, color: C.faint }}>Draft against: {libraryLabel}</div>
       </div>
 
@@ -63,7 +73,7 @@ export default function QuestionCard({ q, idx, prospect, libraryLabel, onStatusC
           </div>
         ) : (
           <div style={{ border: `1px solid ${C.cardLine}`, borderRadius: 12, padding: "14px 16px", background: C.panel, fontSize: 14, lineHeight: 1.7, color: C.body, whiteSpace: "pre-wrap" }}>
-            {q.edited_answer || q.draft_answer}
+            {shownAnswer}
           </div>
         )
       ) : (
