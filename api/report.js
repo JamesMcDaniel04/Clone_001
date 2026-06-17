@@ -1,7 +1,7 @@
 // POST /api/report  { questionnaire?: string, answers: [{number?, question, answer, flag?, flag_type?}], meta: {prospect, vendor, preparedBy, date} }
 // → { report: string }  — a formatted internal review draft (checkbox rendering + section grouping).
 
-import { draftReport } from "./_lib/anthropic.js";
+import { formatReport } from "./_lib/anthropic.js";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -16,7 +16,7 @@ export default async function handler(req, res) {
     if (!Array.isArray(answers) || answers.length === 0) {
       return res.status(400).json({ error: "Provide a non-empty 'answers' array." });
     }
-    const report = await draftReport({ questionnaire, answers, meta });
+    const report = await formatReport({ questionnaire, answers, meta });
     return res.status(200).json({ report });
   } catch (err) {
     console.error("report error:", err);

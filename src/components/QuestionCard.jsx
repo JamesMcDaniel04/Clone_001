@@ -5,10 +5,11 @@ import { IconShield, IconBook, IconCheck } from "./icons.jsx";
 // Renders one project entry: question, gap/library pills, Claude draft, flag
 // callout, and the review controls (status + edit + promote). Ports the Phase-0
 // review card. q = project_entries row; callbacks persist to Supabase.
-export default function QuestionCard({ q, idx, prospect, category, libraryLabel, resolve, onStatusChange, onAnswerEdit, onPromote, onDelete }) {
+export default function QuestionCard({ q, idx, prospect, category, libraryLabel, resolve, onStatusChange, onAnswerEdit, onPromote, onDelete, attention = false, compact = false }) {
   const [editing, setEditing] = useState(false);
   const [answer, setAnswer] = useState(q.edited_answer || q.draft_answer || "");
   const [promoted, setPromoted] = useState(false);
+  const [expanded, setExpanded] = useState(!compact);
 
   // Tokens like [[Client Name]] are stored raw (reusable) and resolved on display.
   const rawAnswer = q.edited_answer || q.draft_answer || "";
@@ -25,8 +26,21 @@ export default function QuestionCard({ q, idx, prospect, category, libraryLabel,
   };
   const btn = { fontSize: 12, padding: "5px 12px", borderRadius: 8, border: `1px solid ${C.line}`, cursor: "pointer", background: "#fff", color: C.body, fontFamily: "inherit" };
 
+  if (compact && !expanded) {
+    return (
+      <div style={{ border: `1px solid ${C.cardLine}`, borderRadius: 12, padding: "12px 14px", marginBottom: 10, background: "#fff", display: "flex", alignItems: "center", gap: 14 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 12, color: C.muted, marginBottom: 3 }}>{q.question_id || `Q${idx + 1}`} · {category || "Vendor security"}</div>
+          <div style={{ fontSize: 14, color: C.ink, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{q.question}</div>
+        </div>
+        <span style={{ fontSize: 11.5, fontWeight: 700, padding: "3px 9px", borderRadius: 7, background: statusColors[q.status] || C.greenSoft, color: q.status === "approved" ? "#15803D" : C.body }}>{statusLabels[q.status] || "Clean"}</span>
+        <button onClick={() => setExpanded(true)} style={btn}>Review</button>
+      </div>
+    );
+  }
+
   return (
-    <div style={{ border: `1px solid ${C.cardLine}`, borderRadius: 16, padding: "20px 22px", marginBottom: 16, background: "#fff", boxShadow: "0 1px 2px rgba(16,24,40,0.03)" }}>
+    <div style={{ border: `1px solid ${attention ? C.tanLine : C.cardLine}`, borderLeft: attention ? `4px solid ${C.amber}` : `1px solid ${C.cardLine}`, borderRadius: 16, padding: "20px 22px", marginBottom: 16, background: "#fff", boxShadow: "0 1px 2px rgba(16,24,40,0.03)" }}>
       <div style={{ fontSize: 12, color: C.muted, marginBottom: 6 }}>Question — {prospect} · {q.question_id || `Q${idx + 1}`}</div>
       <div style={{ fontSize: 16.5, color: C.ink, fontWeight: 550, lineHeight: 1.5, marginBottom: 12 }}>{q.question}</div>
 
@@ -96,7 +110,9 @@ export default function QuestionCard({ q, idx, prospect, category, libraryLabel,
           {Object.keys(statusLabels).map((s) => <option key={s} value={s}>{statusLabels[s]}</option>)}
         </select>
         <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+          {compact && <button onClick={() => setExpanded(false)} style={btn}>Collapse</button>}
           {!editing && q.draft_answer && <button onClick={() => setEditing(true)} style={btn}>Edit</button>}
+          {q.status !== "approved" && q.draft_answer && <button onClick={() => onStatusChange(idx, "approved")} style={{ ...btn, background: C.greenSoft, border: "1px solid #BBE7CB", color: "#15803D", fontWeight: 600 }}>Approve</button>}
           {onDelete && <button onClick={() => onDelete(idx)} style={{ ...btn, color: C.red, borderColor: C.redSoft }}>Delete</button>}
           {!promoted && q.status === "approved" && (
             <button onClick={() => { onPromote(idx); setPromoted(true); }} style={{ ...btn, background: C.greenSoft, border: "1px solid #BBE7CB", color: "#15803D" }}>Save to library</button>

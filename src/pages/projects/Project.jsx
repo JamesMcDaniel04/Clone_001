@@ -22,10 +22,10 @@ function parseQuestions(raw) {
   return lines.map((l) => l.replace(/^\d+[.)]\s*/, "").trim()).filter((l) => l.length > 10);
 }
 function statusFromDraft(d) {
-  if (!d.flag) return "draft";
+  if (!d.flag) return "approved";
   if (d.flag_type === "Needs engineering") return "needs_engineering";
   // No-match answers are best-effort drafts to validate (only "withheld" when truly blank).
-  if (d.flag_type === "No library match") return d.draft_answer ? "draft" : "withheld";
+  if (d.flag_type === "No library match") return d.draft_answer ? "needs_legal" : "withheld";
   return "needs_legal";
 }
 
@@ -213,6 +213,23 @@ export default function Project() {
     } catch (e) { setErr(e.message); }
   }
 
+  function needsAttention(q) {
+    return q.status !== "approved" && (!!q.flag || !q.draft_answer || ["needs_legal", "needs_engineering", "withheld"].includes(q.status));
+  }
+
+  async function approveCleanAnswers() {
+    const targets = (entries || [])
+      .map((entry, idx) => ({ entry, idx }))
+      .filter(({ entry }) => !needsAttention(entry) && entry.status !== "approved" && entry.draft_answer);
+    if (!targets.length) return;
+    try {
+      await Promise.all(targets.map(({ entry }) => updateProjectEntry(entry.id, { status: "approved" })));
+      setEntries((prev) => prev.map((entry) => targets.some((t) => t.entry.id === entry.id) ? { ...entry, status: "approved" } : entry));
+      setExportMsg(`Approved ${targets.length} clean answer${targets.length === 1 ? "" : "s"}.`);
+      setTimeout(() => setExportMsg(null), 3000);
+    } catch (e) { setErr(e.message); }
+  }
+
   function exportTxt() {
     const approved = (entries || []).filter((q) => q.status === "approved");
     const lines = approved.map((q, i) => `Q${i + 1}: ${q.question}\n\nA: ${resolveMV(q.edited_answer)}\n\n${q.flag ? "⚠ FLAGGED: " + (q.flag_reason || "") + "\n" : ""}---`);
@@ -256,11 +273,21 @@ export default function Project() {
         flag_type: q.flag_type || null,
       }));
       const questionnaire = project?.notes || answers.map((a) => `${a.number}. ${a.question}`).join("\n");
-      const res = await fetch("/api/report", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ questionnaire, answers, meta: { ...meta, prospect: project?.prospect || "Vendor" } }),
-      });
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 180000); // never hang the modal forever
+      let res;
+      try {
+        res = await fetch("/api/report", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ questionnaire, answers, meta: { ...meta, prospect: project?.prospect || "Vendor" } }),
+          signal: ctrl.signal,
+        });
+      } catch (e) {
+        throw new Error(e.name === "AbortError" ? "Report timed out — try again." : e.message);
+      } finally {
+        clearTimeout(timer);
+      }
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Report failed");
       const blob = new Blob([data.report], { type: "text/plain" });
@@ -284,6 +311,9 @@ export default function Project() {
   const hasEntries = entries.length > 0;
   const approved = entries.filter((q) => q.status === "approved").length;
   const flagged = entries.filter((q) => q.flag).length;
+  const attentionItems = entries.map((q, i) => ({ q, i })).filter(({ q }) => needsAttention(q));
+  const cleanItems = entries.map((q, i) => ({ q, i })).filter(({ q }) => !needsAttention(q));
+  const cleanPendingApproval = cleanItems.filter(({ q }) => q.status !== "approved" && q.draft_answer).length;
 
   if (project.is_template) {
     return (
@@ -381,12 +411,31 @@ export default function Project() {
           <Stepper statuses={["complete", "complete", "complete", "active"]} />
           <div style={{ display: "flex", gap: 10, marginBottom: 18, flexWrap: "wrap" }}>
             <Stat label="Total" value={entries.length} />
+            <Stat label="Needs attention" value={attentionItems.length} tone={attentionItems.length ? "tan" : "green"} />
             <Stat label="Approved" value={approved} tone="green" />
             <Stat label="Flagged" value={flagged} tone="tan" />
+            {cleanPendingApproval > 0 && <Button variant="primary" onClick={approveCleanAnswers}>Approve {cleanPendingApproval} clean</Button>}
           </div>
-          {entries.map((q, i) => (
-            <QuestionCard key={q.id || i} q={q} idx={i} prospect={project.prospect} category={categoryForEntry(q)} libraryLabel={libraryLabel} resolve={resolveMV} onStatusChange={handleStatusChange} onAnswerEdit={handleAnswerEdit} onPromote={handlePromote} onDelete={removeProjectEntry} />
-          ))}
+
+          {attentionItems.length > 0 ? (
+            <ReviewGroup title="Needs attention" hint="Claude flagged these for legal, engineering, no-match, or missing-answer review.">
+              {attentionItems.map(({ q, i }) => (
+                <QuestionCard key={q.id || i} q={q} idx={i} prospect={project.prospect} category={categoryForEntry(q)} libraryLabel={libraryLabel} resolve={resolveMV} onStatusChange={handleStatusChange} onAnswerEdit={handleAnswerEdit} onPromote={handlePromote} onDelete={removeProjectEntry} attention />
+              ))}
+            </ReviewGroup>
+          ) : (
+            <div style={{ background: C.greenSoft, border: "1px solid #BBE7CB", color: "#15803D", borderRadius: 12, padding: "12px 14px", fontSize: 13, fontWeight: 600, marginBottom: 16 }}>
+              No answers need attention. Clean answers were approved automatically.
+            </div>
+          )}
+
+          <ReviewGroup title="Approved / resolved answers" hint="Clean answers are approved automatically. Manually approved attention items move here after review.">
+            {cleanItems.length === 0 ? (
+              <div style={{ fontSize: 13, color: C.muted, padding: "10px 0" }}>No clean answers yet.</div>
+            ) : cleanItems.map(({ q, i }) => (
+              <QuestionCard key={q.id || i} q={q} idx={i} prospect={project.prospect} category={categoryForEntry(q)} libraryLabel={libraryLabel} resolve={resolveMV} onStatusChange={handleStatusChange} onAnswerEdit={handleAnswerEdit} onPromote={handlePromote} onDelete={removeProjectEntry} compact />
+            ))}
+          </ReviewGroup>
         </div>
       )}
 
@@ -430,6 +479,18 @@ function ReportModal({ busy, onClose, onGenerate }) {
         <Button variant="primary" disabled={busy} onClick={() => onGenerate({ vendor, preparedBy, date })}>{busy ? "Generating…" : "Generate report"}</Button>
       </div>
     </Modal>
+  );
+}
+
+function ReviewGroup({ title, hint, children }) {
+  return (
+    <section style={{ marginBottom: 24 }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 10 }}>
+        <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: C.ink }}>{title}</h2>
+        {hint && <span style={{ fontSize: 12.5, color: C.muted }}>{hint}</span>}
+      </div>
+      {children}
+    </section>
   );
 }
 

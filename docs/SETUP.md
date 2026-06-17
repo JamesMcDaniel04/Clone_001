@@ -44,6 +44,7 @@ Fill in `.env.local`:
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Settings → API → service_role key (**secret**) |
 | `ANTHROPIC_API_KEY` | Anthropic console |
 | `ANTHROPIC_MODEL` | optional; default `claude-opus-4-8`, or `claude-sonnet-4-6` for cheaper/faster |
+| `KNOWLEDGE_SOURCE_URLS` | optional comma/newline-separated URLs for trust portal, Seismic, API docs, or other public/hosted source materials |
 
 ---
 

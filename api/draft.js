@@ -6,6 +6,7 @@
 
 import { getDbLibrary } from "./_lib/supabaseAdmin.js";
 import { getLibrary } from "./_lib/library.js";
+import { getSupplementalSources } from "./_lib/sources.js";
 import { draftAnswers } from "./_lib/anthropic.js";
 
 export default async function handler(req, res) {
@@ -25,8 +26,12 @@ export default async function handler(req, res) {
     }
 
     // Prefer the library the client read (authenticated session); fall back to the
-    // server read, then the bundled library.
-    const library = clientLibrary || (await getDbLibrary()) || (await getLibrary()).text;
+    // server read, then the bundled library. Always append supplemental sources:
+    // public People.ai docs, configured URLs, uploaded/API-doc summaries, CISO/security
+    // confirmation, certification-derived controls, and conservative inference rules.
+    const primaryLibrary = clientLibrary || (await getDbLibrary()) || (await getLibrary()).text;
+    const supplementalSources = await getSupplementalSources();
+    const library = [primaryLibrary, supplementalSources].filter(Boolean).join("\n\n");
     const answers = await draftAnswers({ questions, prospect: prospect || "Unknown", library });
 
     return res.status(200).json({ answers });
