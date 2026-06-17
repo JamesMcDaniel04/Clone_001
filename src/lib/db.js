@@ -99,6 +99,24 @@ export async function listReviews({ categoryId, status, search } = {}) {
   return unwrap(await q);
 }
 
+// ── Reviews from Projects (the repo of answered questionnaire entries) ───────
+export async function listProjectReviews({ projectId, search } = {}) {
+  let q = supabase
+    .from("project_entries")
+    .select("*, project:project_id(name, prospect), section:section_id(name)")
+    .order("updated_at", { ascending: false })
+    .limit(300);
+  if (projectId && projectId !== "all") q = q.eq("project_id", projectId);
+  if (search) q = q.or(`question.ilike.%${search}%,edited_answer.ilike.%${search}%,draft_answer.ilike.%${search}%`);
+  return unwrap(await q);
+}
+
+// Find an existing library entry whose question matches (case-insensitive, exact).
+export async function findLibraryEntryByQuestion(question) {
+  const data = unwrap(await supabase.from("library_entries").select("id, question").ilike("question", question).limit(1));
+  return data?.[0] || null;
+}
+
 // ── Dashboard counts ────────────────────────────────────────────────────────
 export async function countRows(table, filter) {
   let q = supabase.from(table).select("*", { count: "exact", head: true });

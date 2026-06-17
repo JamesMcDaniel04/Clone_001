@@ -21,7 +21,7 @@ export default function Reviews() {
 
   return (
     <div>
-      <PageHeader title="Reviews" subtitle="The review queue across the library. Filter, then approve or send entries for sign-off." />
+      <PageHeader title="Reviews — From Library" subtitle="Periodic review of existing library entries. Filter, then approve or reassign." />
       {err && <div style={{ color: C.red, fontSize: 13, marginBottom: 12 }}>{err}</div>}
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginBottom: 22, background: "#fff", border: `1px solid ${C.cardLine}`, borderRadius: 12, padding: 16 }}>

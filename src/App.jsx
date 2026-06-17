@@ -8,6 +8,7 @@ import Home from "./pages/Home.jsx";
 import ProjectsList from "./pages/projects/List.jsx";
 import Project from "./pages/projects/Project.jsx";
 import Reviews from "./pages/reviews/Reviews.jsx";
+import FromProjects from "./pages/reviews/FromProjects.jsx";
 import LibraryManagement from "./pages/library/Management.jsx";
 import LibraryCategory from "./pages/library/Category.jsx";
 import MergeVariables from "./pages/library/MergeVariables.jsx";
@@ -39,7 +40,9 @@ export default function App() {
         <Route path="/" element={<Home />} />
         <Route path="/projects" element={<ProjectsList />} />
         <Route path="/projects/:id" element={<Project />} />
-        <Route path="/reviews" element={<Reviews />} />
+        <Route path="/reviews" element={<FromProjects />} />
+        <Route path="/reviews/projects" element={<FromProjects />} />
+        <Route path="/reviews/library" element={<Reviews />} />
         <Route path="/library" element={<LibraryManagement />} />
         <Route path="/library/category/:id" element={<LibraryCategory />} />
         <Route path="/library/merge-variables" element={<MergeVariables />} />

@@ -11,7 +11,7 @@ export default function Home() {
   const [projects, setProjects] = useState(null);
   const [reviews, setReviews] = useState(null);
   const [err, setErr] = useState(null);
-  const name = userDisplay(user).name?.split(" ")[0];
+  const name = userDisplay(user).name?.split(" ")[0] || "there";
 
   useEffect(() => {
     Promise.all([listProjects(), listReviews({ status: "never_reviewed" })])

@@ -5,6 +5,7 @@ import { C, font } from "../lib/theme.js";
 
 export default function Login() {
   const { user } = useSession();
+  if (import.meta.env.VITE_DISABLE_AUTH === "true") return <Navigate to="/" replace />;
   if (user) return <Navigate to="/" replace />;
 
   async function signIn() {

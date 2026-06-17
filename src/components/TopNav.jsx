@@ -63,7 +63,10 @@ export default function TopNav() {
 
         <Link to="/" style={{ color: C.navyText, display: "flex", alignItems: "center" }} title="Home"><IconHome /></Link>
         <NavMenu label="Projects" to="/projects" items={[{ label: "All Projects", to: "/projects" }, { label: "Create a Project", to: "/projects?new=1" }]} />
-        <NavMenu label="Reviews" to="/reviews" />
+        <NavMenu label="Reviews" to="/reviews" items={[
+          { label: "From Projects", to: "/reviews/projects" },
+          { label: "From Library", to: "/reviews/library" },
+        ]} />
         <NavMenu label="Library" to="/library" items={[
           { label: "Search", to: "/library/search" },
           { label: "Library Management", to: "/library" },

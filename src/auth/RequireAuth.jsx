@@ -30,6 +30,10 @@ export default function RequireAuth({ children }) {
     );
   }
 
+  // Test mode: skip login entirely (set VITE_DISABLE_AUTH=true in .env).
+  // Requires the anon RLS policies from supabase/dev_open_rls.sql. Revert for production.
+  if (import.meta.env.VITE_DISABLE_AUTH === "true") return children;
+
   if (loading) {
     return <Centered><div style={{ fontSize: 14, color: C.muted, textAlign: "center" }}>Loading…</div></Centered>;
   }
