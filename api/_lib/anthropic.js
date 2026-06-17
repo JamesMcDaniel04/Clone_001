@@ -130,13 +130,14 @@ then the answer, rendered as:
 - Free-text: write the answer text directly (no checkboxes).
 - URLs or attachments: on their own line prefixed "URL: " or "Attachment: ".
 - If the answer is flagged/unvalidated, add a line "  ↳ [VERIFY]".
+- If the ANSWER is exactly "(NO ANSWER ON FILE)", do NOT tick any option and do NOT list the options; output just the question line followed by a line "  ↳ No answer on file — needs input".
 
-Use ONLY the facts in the provided answers — never invent. Keep the original numbering. Separate questions with a blank line. Output ONLY the formatted questions — no section heading, no document header, no preamble.`;
+Use ONLY the facts in the provided answers — never invent, and never tick a checkbox the answer doesn't support. Keep the original numbering. Separate questions with a blank line. Output ONLY the formatted questions — no section heading, no document header, no preamble.`;
 
 async function formatChunk(items) {
   const client = new Anthropic();
   const user = items
-    .map((a) => `${a.number}. ${a.question}\nANSWER: ${a.answer || "(no answer)"}${a.flag ? `  [FLAGGED: ${a.flag_type || "verify"}]` : ""}`)
+    .map((a) => `${a.number}. ${a.question}\nANSWER: ${a.answer && a.answer.trim() ? a.answer : "(NO ANSWER ON FILE)"}${a.flag ? `  [FLAGGED: ${a.flag_type || "verify"}]` : ""}`)
     .join("\n\n");
   const stream = client.messages.stream({
     model: MODEL,

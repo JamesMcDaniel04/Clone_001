@@ -8,6 +8,7 @@ import QuestionCard from "../../components/QuestionCard.jsx";
 import ImportModal from "../../components/ImportModal.jsx";
 import { buildResolver } from "../../lib/mergeVars.js";
 import { matchLibraryEntries } from "../../lib/libraryMatch.js";
+import { reportToHtml } from "../../lib/reportDoc.js";
 import { IconBook } from "../../components/icons.jsx";
 
 function parseQuestions(raw) {
@@ -264,7 +265,11 @@ export default function Project() {
   async function generateReport(meta) {
     setReportBusy(true);
     setErr(null);
+    // Open the tab synchronously (within the click) so popup blockers allow it.
+    const win = window.open("", "_blank");
+    if (win) win.document.write("<p style='font-family:Arial,sans-serif;color:#666;padding:28px'>Generating report…</p>");
     try {
+      const meta2 = { ...meta, prospect: project?.prospect || "Vendor" };
       const answers = (entries || []).map((q, i) => ({
         number: i + 1,
         question: q.question,
@@ -274,13 +279,13 @@ export default function Project() {
       }));
       const questionnaire = project?.notes || answers.map((a) => `${a.number}. ${a.question}`).join("\n");
       const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 180000); // never hang the modal forever
+      const timer = setTimeout(() => ctrl.abort(), 180000); // never hang forever
       let res;
       try {
         res = await fetch("/api/report", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ questionnaire, answers, meta: { ...meta, prospect: project?.prospect || "Vendor" } }),
+          body: JSON.stringify({ questionnaire, answers, meta: meta2 }),
           signal: ctrl.signal,
         });
       } catch (e) {
@@ -290,15 +295,23 @@ export default function Project() {
       }
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Report failed");
-      const blob = new Blob([data.report], { type: "text/plain" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url; a.download = `${project?.prospect || "project"}_review_draft_${new Date().toISOString().slice(0, 10)}.txt`; a.click();
-      URL.revokeObjectURL(url);
+
+      // Styled, print-to-PDF document with the report's UI elements.
+      const html = reportToHtml(data.report, meta2);
+      if (win) { win.document.open(); win.document.write(html); win.document.close(); }
+      else {
+        // Popup blocked — fall back to downloading the HTML file.
+        const blob = new Blob([html], { type: "text/html" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url; a.download = `${project?.prospect || "project"}_review_draft_${new Date().toISOString().slice(0, 10)}.html`; a.click();
+        URL.revokeObjectURL(url);
+      }
       setReportOpen(false);
-      setExportMsg("Review-draft report generated.");
-      setTimeout(() => setExportMsg(null), 3000);
+      setExportMsg("Review-draft report ready — use “Save as PDF” in the new tab.");
+      setTimeout(() => setExportMsg(null), 4000);
     } catch (e) {
+      if (win) win.close();
       setErr(e.message);
     } finally {
       setReportBusy(false);
