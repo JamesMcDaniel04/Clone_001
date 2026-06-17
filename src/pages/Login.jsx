@@ -36,7 +36,7 @@ export default function Login() {
           </button>
         ) : (
           <div style={{ fontSize: 13, color: C.body, background: C.panel, border: `1px solid ${C.line}`, borderRadius: 10, padding: "12px 14px", lineHeight: 1.55 }}>
-            Supabase isn't configured yet. Add <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code> to <code>.env.local</code> and follow <code>docs/SETUP.md</code>.
+            Supabase isn't configured yet. Add <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code> or <code>VITE_SUPABASE_PUBLISHABLE_KEY</code> to <code>.env.local</code> and follow <code>docs/SETUP.md</code>.
           </div>
         )}
       </div>

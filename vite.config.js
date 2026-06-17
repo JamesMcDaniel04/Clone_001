@@ -41,6 +41,13 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   return {
     plugins: [react(), devApi(env)],
-    server: { port: 3000, strictPort: true },
+    server: {
+      port: 3000,
+      strictPort: true,
+      // Allow the app to be reached through an ngrok tunnel (Vite blocks
+      // unknown Host headers by default). `.ngrok-free.dev` covers any
+      // reserved ngrok subdomain.
+      allowedHosts: [".ngrok-free.dev", ".ngrok.app", ".ngrok.io"],
+    },
   };
 });

@@ -21,7 +21,8 @@ export default function RequireAuth({ children }) {
         <div style={{ fontSize: 14, color: C.body, lineHeight: 1.6 }}>
           This is the Clone platform. It needs a Supabase project for its database and sign-in. Add{" "}
           <code style={{ background: C.panel, padding: "1px 5px", borderRadius: 5 }}>VITE_SUPABASE_URL</code> and{" "}
-          <code style={{ background: C.panel, padding: "1px 5px", borderRadius: 5 }}>VITE_SUPABASE_ANON_KEY</code> to{" "}
+          <code style={{ background: C.panel, padding: "1px 5px", borderRadius: 5 }}>VITE_SUPABASE_ANON_KEY</code>{" "}
+          or <code style={{ background: C.panel, padding: "1px 5px", borderRadius: 5 }}>VITE_SUPABASE_PUBLISHABLE_KEY</code> to{" "}
           <code style={{ background: C.panel, padding: "1px 5px", borderRadius: 5 }}>.env.local</code>, run the SQL in{" "}
           <code style={{ background: C.panel, padding: "1px 5px", borderRadius: 5 }}>supabase/</code>, then restart. Full steps are in{" "}
           <code style={{ background: C.panel, padding: "1px 5px", borderRadius: 5 }}>docs/SETUP.md</code>.

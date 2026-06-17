@@ -40,7 +40,7 @@ Fill in `.env.local`:
 | Variable | Where it comes from |
 |---|---|
 | `VITE_SUPABASE_URL` | Supabase → Settings → API → Project URL |
-| `VITE_SUPABASE_ANON_KEY` | Supabase → Settings → API → anon key (public, RLS-protected) |
+| `VITE_SUPABASE_ANON_KEY` or `VITE_SUPABASE_PUBLISHABLE_KEY` | Supabase → Settings → API → anon/public publishable key (public, RLS-protected) |
 | `VITE_ALLOWED_EMAIL_DOMAIN` | e.g. `people.ai` to restrict sign-in (blank = any Google account) |
 | `SUPABASE_URL` | same Project URL (server-side, for the drafting API) |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Settings → API → service_role key (**secret**) |

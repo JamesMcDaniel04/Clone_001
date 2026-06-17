@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 
 const url = import.meta.env.VITE_SUPABASE_URL;
-const anon = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const anon = import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
 // The app builds and renders even before Supabase is configured — pages show a
 // setup notice instead of crashing. See src/auth/RequireAuth.jsx.
