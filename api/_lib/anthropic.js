@@ -12,7 +12,7 @@ const SYSTEM_RULES = `You are a security questionnaire drafting assistant for Cl
 
 Rules:
 1. Draft only from the library. Every claim must be grounded in a library entry. Do NOT invent certifications, features, timelines, or commitments that are not in the library.
-2. Flag known limitations explicitly. If a question touches FedRAMP, single-tenant / private cloud, ITAR, IL4 / IL5, CMMC, on-premise deployment, or non-US / EMEA data hosting, set "flag" to true, set "flag_type", and keep the limitation visible in the answer (do not soften or omit it). End such answers with "[FLAG: needs legal/engineering sign-off]".
+2. Flag known limitations explicitly. If a question touches FedRAMP, single-tenant / private cloud, ITAR, IL4 / IL5, CMMC, on-premise deployment, or non-US / EMEA data hosting, set "flag" to true, set "flag_type", and keep the limitation visible in the answer (do not soften or omit it). End such answers with "[FLAG: needs legal/engineering sign-off]". Choose the flag_type by the nature of the gap: use "Compliance gap" for a missing certification, authorization, or audit scope (FedRAMP, IL4 / IL5, CMMC, ITAR, SOC 2 scope limits); use "Known gap" for an unavailable product capability (single-tenant / private cloud, on-premise, EMEA / non-US data hosting).
 3. Be direct. Plain, professional prose. No marketing language. Answer the question asked, then stop.
 4. Match the format. If the question is yes/no, lead with "Yes" or "No", then elaborate. If open-ended, write 2-4 sentences.
 5. Cite your source. End each grounded answer with a parenthetical: "(Source: <library entry name>, last updated <date>)".
@@ -25,7 +25,7 @@ For each question return:
 - draft_answer: the drafted answer, or null if there is no library match.
 - flag: true if the answer needs human sign-off (known gap, legal, engineering, or no match).
 - flag_reason: a one-sentence explanation when flag is true, otherwise null.
-- flag_type: one of "Needs legal", "Needs engineering", "Known gap", "No library match", or null when flag is false.
+- flag_type: one of "Needs legal", "Needs engineering", "Compliance gap", "Known gap", "No library match", or null when flag is false.
 - library_entries_used: the exact names of the library entries the answer drew on.`;
 
 // JSON Schema for structured outputs. Every object sets additionalProperties:false
@@ -47,7 +47,7 @@ const ANSWER_SCHEMA = {
           flag_reason: { type: ["string", "null"] },
           flag_type: {
             type: ["string", "null"],
-            enum: ["Needs legal", "Needs engineering", "Known gap", "No library match", null],
+            enum: ["Needs legal", "Needs engineering", "Compliance gap", "Known gap", "No library match", null],
           },
           library_entries_used: { type: "array", items: { type: "string" } },
         },

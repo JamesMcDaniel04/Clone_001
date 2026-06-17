@@ -39,21 +39,34 @@ export async function updateEntry(id, fields) {
   return unwrap(await supabase.from("library_entries").update(fields).eq("id", id).select().single());
 }
 
-// The whole library as a formatted text block (grouped by category) for grounding
-// the drafting API. The signed-in client can always read this, so we pass it to
-// /api/draft rather than relying on the server key to bypass RLS.
-export async function getLibraryText() {
+// Structured library entries (question · answer · category) for grounding the
+// drafting API, scoping by category, and live match previews. The signed-in
+// client can always read this, so we pass it to /api/draft rather than relying
+// on the server key to bypass RLS.
+export async function getLibraryEntries() {
   const data = unwrap(
-    await supabase.from("library_entries").select("question, answer, category:category_id(name)").not("answer", "is", null).limit(2000)
+    await supabase.from("library_entries").select("question, answer, category_id, category:category_id(name)").not("answer", "is", null).limit(2000)
   );
-  if (!data.length) return null;
+  return data || [];
+}
+
+// Format a set of library entries into the grouped text block the drafting
+// prompt expects. Returns null when there's nothing to ground on (caller then
+// falls back to the server/bundled library).
+export function libraryTextFromEntries(entries) {
+  if (!entries?.length) return null;
   const byCat = new Map();
-  for (const row of data) {
+  for (const row of entries) {
     const cat = row.category?.name || "General";
     if (!byCat.has(cat)) byCat.set(cat, []);
     byCat.get(cat).push(`**${row.question}**\n${row.answer}`);
   }
   return [...byCat.entries()].map(([c, items]) => `### ${c}\n\n${items.join("\n\n")}`).join("\n\n");
+}
+
+// The whole library as a formatted text block (grouped by category).
+export async function getLibraryText() {
+  return libraryTextFromEntries(await getLibraryEntries());
 }
 
 // ── Tags ────────────────────────────────────────────────────────────────────

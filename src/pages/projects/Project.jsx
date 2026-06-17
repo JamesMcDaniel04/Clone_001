@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import { useParams, useLocation } from "react-router-dom";
 import { C } from "../../lib/theme.js";
-import { getProject, getProjectEntries, insertProjectEntries, updateProjectEntry, deleteProjectEntry, createEntry, listMergeVariables, updateProject, getLibraryText } from "../../lib/db.js";
-import { PageHeader, Button, Spinner, Modal, Field, Input } from "../../components/ui.jsx";
+import { getProject, getProjectEntries, insertProjectEntries, updateProjectEntry, deleteProjectEntry, createEntry, listMergeVariables, updateProject, getLibraryEntries, libraryTextFromEntries, listCategories } from "../../lib/db.js";
+import { PageHeader, Button, Spinner, Modal, Field, Input, Select } from "../../components/ui.jsx";
 import Stepper from "../../components/Stepper.jsx";
 import QuestionCard from "../../components/QuestionCard.jsx";
 import ImportModal from "../../components/ImportModal.jsx";
 import { buildResolver } from "../../lib/mergeVars.js";
+import { matchLibraryEntries } from "../../lib/libraryMatch.js";
+import { IconBook } from "../../components/icons.jsx";
 
 function parseQuestions(raw) {
   return raw.split(/\n+/).map((l) => l.replace(/^[\d]+[.)]\s*/, "").trim()).filter((l) => l.length > 10);
@@ -30,12 +32,30 @@ export default function Project() {
   const [exportMsg, setExportMsg] = useState(null);
   const [mergeVars, setMergeVars] = useState([]);
   const [templateEntryOpen, setTemplateEntryOpen] = useState(false);
+  const [libEntries, setLibEntries] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [draftScope, setDraftScope] = useState({ id: "all", name: "Full library" });
+  const [libraryLabel, setLibraryLabel] = useState("Full library");
+  const [matches, setMatches] = useState([]); // [{ question, entries }] shown live while drafting
 
   useEffect(() => {
     getProject(id).then(setProject).catch((e) => setErr(e.message));
     getProjectEntries(id).then(setEntries).catch((e) => setErr(e.message));
     listMergeVariables().then(setMergeVars).catch(() => {});
+    getLibraryEntries().then(setLibEntries).catch(() => {});
+    listCategories().then(setCategories).catch(() => {});
   }, [id]);
+
+  // entry name → category name, for deriving each answer's category from the
+  // library entries the model grounded on (q.library_entries_used).
+  const catByName = new Map(libEntries.map((e) => [e.question, e.category?.name || "General"]));
+  function categoryForEntry(usedNames) {
+    if (!usedNames?.length) return "Vendor security";
+    const counts = {};
+    for (const n of usedNames) { const c = catByName.get(n); if (c) counts[c] = (counts[c] || 0) + 1; }
+    const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+    return top ? top[0] : "Vendor security";
+  }
 
   // Pre-fill the draft box from a template's questions (passed via navigation state).
   useEffect(() => {
@@ -77,11 +97,18 @@ export default function Project() {
     const parsed = parseQuestions(raw);
     if (!parsed.length) return;
     setErr(null);
+
+    // Scope the library to the chosen category (or the whole library) and surface
+    // the matched entries live while Claude drafts — the model returns the
+    // authoritative library_entries_used afterward.
+    const scoped = draftScope.id === "all" ? libEntries : libEntries.filter((e) => e.category_id === draftScope.id);
+    setMatches(parsed.map((q) => ({ question: q, entries: matchLibraryEntries(q, scoped) })));
+    setLibraryLabel(draftScope.name);
     setPhase("drafting");
     try {
-      // Pass the live library from the client (it can read it via the session) so
-      // drafting always grounds on Supabase, not the server fallback.
-      const library = await getLibraryText().catch(() => null);
+      // Pass the live (scoped) library from the client so drafting grounds on
+      // Supabase, not the server fallback.
+      const library = libraryTextFromEntries(scoped);
       const res = await fetch("/api/draft", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -226,6 +253,25 @@ export default function Project() {
       {phase === "drafting" ? (
         <div>
           <Stepper statuses={["complete", "complete", "active", "pending"]} />
+          {matches.map((m, i) => (
+            <div key={m.question + i} style={{ border: `1px solid ${C.cardLine}`, borderRadius: 16, padding: "18px 20px", marginBottom: 14, background: "#fff" }}>
+              <div style={{ fontSize: 12, color: C.muted, marginBottom: 6 }}>Question — {project.prospect || "—"} · Q{i + 1}</div>
+              <div style={{ fontSize: 15.5, color: C.ink, fontWeight: 550, lineHeight: 1.45, marginBottom: m.entries.length ? 14 : 0 }}>{m.question}</div>
+              {m.entries.length > 0 && (
+                <>
+                  <div style={{ fontSize: 12, color: C.muted, marginBottom: 8 }}>Library matches</div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {m.entries.map((e) => (
+                      <span key={e.question} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#fff", color: "#4B5563", border: "1px solid #E5E7EB", borderRadius: 8, padding: "4px 10px", fontSize: 12, fontWeight: 500 }}>
+                        <IconBook /> {e.question}
+                      </span>
+                    ))}
+                  </div>
+                  <div style={{ fontSize: 12.5, color: C.faint, marginTop: 10 }}>{m.entries.length} relevant {m.entries.length === 1 ? "entry" : "entries"} found · drafting now…</div>
+                </>
+              )}
+            </div>
+          ))}
           <Spinner label={`Drafting answers for ${project.prospect || "this project"}…`} />
         </div>
       ) : !hasEntries ? (
@@ -239,8 +285,23 @@ export default function Project() {
             placeholder={`Paste questionnaire questions here — one per line, numbered or not.\n\nExample:\n1. Is your platform FedRAMP authorized?\n2. Do you support SSO via SAML 2.0?\n3. What is your data retention policy?`}
             style={{ width: "100%", height: 250, fontSize: 14, lineHeight: 1.6, border: `1px solid ${C.line}`, borderRadius: 12, padding: "14px 16px", resize: "vertical", boxSizing: "border-box", fontFamily: "inherit", color: C.ink }}
           />
-          <div style={{ display: "flex", gap: 10, marginTop: 12, alignItems: "center" }}>
+          <div style={{ display: "flex", gap: 10, marginTop: 12, alignItems: "center", flexWrap: "wrap" }}>
             <Button variant="primary" disabled={!raw.trim()} onClick={handleDraft} style={{ opacity: raw.trim() ? 1 : 0.5, cursor: raw.trim() ? "pointer" : "not-allowed" }}>Draft answers</Button>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: C.faint }}>
+              <span>Draft against:</span>
+              <Select
+                value={draftScope.id}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  const cat = categories.find((c) => c.id === v);
+                  setDraftScope(v === "all" ? { id: "all", name: "Full library" } : { id: v, name: cat?.name || "Library" });
+                }}
+                style={{ width: "auto", padding: "5px 9px", fontSize: 12.5 }}
+              >
+                <option value="all">Full library</option>
+                {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </Select>
+            </div>
             <span style={{ fontSize: 12.5, color: C.faint }}>{raw.trim() ? `~${parseQuestions(raw).length} questions detected` : ""}</span>
           </div>
         </div>
@@ -253,7 +314,7 @@ export default function Project() {
             <Stat label="Flagged" value={flagged} tone="tan" />
           </div>
           {entries.map((q, i) => (
-            <QuestionCard key={q.id || i} q={q} idx={i} prospect={project.prospect} libraryLabel="Full library" resolve={resolveMV} onStatusChange={handleStatusChange} onAnswerEdit={handleAnswerEdit} onPromote={handlePromote} onDelete={removeProjectEntry} />
+            <QuestionCard key={q.id || i} q={q} idx={i} prospect={project.prospect} category={categoryForEntry(q.library_entries_used)} libraryLabel={libraryLabel} resolve={resolveMV} onStatusChange={handleStatusChange} onAnswerEdit={handleAnswerEdit} onPromote={handlePromote} onDelete={removeProjectEntry} />
           ))}
         </div>
       )}

@@ -5,7 +5,7 @@ import { IconShield, IconBook, IconCheck } from "./icons.jsx";
 // Renders one project entry: question, gap/library pills, Claude draft, flag
 // callout, and the review controls (status + edit + promote). Ports the Phase-0
 // review card. q = project_entries row; callbacks persist to Supabase.
-export default function QuestionCard({ q, idx, prospect, libraryLabel, resolve, onStatusChange, onAnswerEdit, onPromote, onDelete }) {
+export default function QuestionCard({ q, idx, prospect, category, libraryLabel, resolve, onStatusChange, onAnswerEdit, onPromote, onDelete }) {
   const [editing, setEditing] = useState(false);
   const [answer, setAnswer] = useState(q.edited_answer || q.draft_answer || "");
   const [promoted, setPromoted] = useState(false);
@@ -36,7 +36,9 @@ export default function QuestionCard({ q, idx, prospect, libraryLabel, resolve, 
             <IconShield /> {q.flag_type || "Flagged for review"}
           </span>
         )}
-        <span style={{ display: "inline-flex", alignItems: "center", background: "#F4F4F2", color: C.muted, border: "1px solid #ECECE8", borderRadius: 8, padding: "3px 10px", fontSize: 12, fontWeight: 500 }}>Vendor security</span>
+        <span style={{ display: "inline-flex", alignItems: "center", background: "#F4F4F2", color: C.muted, border: "1px solid #ECECE8", borderRadius: 8, padding: "3px 10px", fontSize: 12, fontWeight: 500 }}>
+          {category || "Vendor security"}{q.section?.name ? ` · ${q.section.name}` : ""}
+        </span>
       </div>
 
       {q.library_entries_used?.length > 0 && (
