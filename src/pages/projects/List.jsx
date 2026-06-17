@@ -152,15 +152,6 @@ function CreateProjectModal({ user, onClose, onCreated, onError, templates }) {
           <Button variant="primary" disabled={!draft.name.trim() || busy} onClick={() => create(null)} style={{ opacity: draft.name.trim() ? 1 : 0.5, whiteSpace: "nowrap" }}>Create Project</Button>
         </Row>
 
-        {/* Portal (scaffold) */}
-        <Row>
-          <div>
-            <div style={sectionLabel}>Import From a Portal</div>
-            <div style={sectionDesc}>Pull questions from a security portal (Whistic, SafeBase, …). Coming soon.</div>
-          </div>
-          <Button disabled style={{ opacity: 0.5, whiteSpace: "nowrap" }}>Create Portal-based Project</Button>
-        </Row>
-
         {/* Templates */}
         <Row last>
           <div style={{ flex: 1 }}>

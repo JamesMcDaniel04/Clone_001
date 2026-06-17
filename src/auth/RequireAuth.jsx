@@ -12,7 +12,7 @@ function Centered({ children }) {
 }
 
 export default function RequireAuth({ children }) {
-  const { user, loading } = useSession();
+  const { user, loading, anonError } = useSession();
 
   if (!isSupabaseConfigured) {
     return (
@@ -30,9 +30,28 @@ export default function RequireAuth({ children }) {
     );
   }
 
-  // Test mode: skip login entirely (set VITE_DISABLE_AUTH=true in .env).
-  // Requires the anon RLS policies from supabase/dev_open_rls.sql. Revert for production.
-  if (import.meta.env.VITE_DISABLE_AUTH === "true") return children;
+  // Test mode (VITE_DISABLE_AUTH=true): an anonymous session is created automatically so
+  // the database works without a real login — no SQL needed, just enable Anonymous sign-ins.
+  if (import.meta.env.VITE_DISABLE_AUTH === "true") {
+    if (anonError) {
+      return (
+        <Centered>
+          <div style={{ fontSize: 18, fontWeight: 650, color: C.ink, marginBottom: 10 }}>Enable anonymous sign-ins</div>
+          <div style={{ fontSize: 14, color: C.body, lineHeight: 1.6 }}>
+            Test mode signs in anonymously so the database works without a login, but your Supabase
+            project has that turned off. Enable it in{" "}
+            <strong>Supabase → Authentication → Sign In / Providers → Anonymous Sign-Ins</strong>{" "}
+            (toggle on, Save), then refresh this page.
+            <div style={{ marginTop: 10, fontSize: 12, color: C.muted }}>Supabase said: {anonError}</div>
+          </div>
+        </Centered>
+      );
+    }
+    if (loading || !user) {
+      return <Centered><div style={{ fontSize: 14, color: C.muted, textAlign: "center" }}>Starting test session…</div></Centered>;
+    }
+    return children;
+  }
 
   if (loading) {
     return <Centered><div style={{ fontSize: 14, color: C.muted, textAlign: "center" }}>Loading…</div></Centered>;
