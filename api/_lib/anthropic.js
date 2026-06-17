@@ -13,10 +13,10 @@ const SYSTEM_RULES = `You are a security questionnaire drafting assistant for Cl
 Rules:
 1. Draft only from the library. Every claim must be grounded in a library entry. Do NOT invent certifications, features, timelines, or commitments that are not in the library.
 2. Flag known limitations explicitly. If a question touches FedRAMP, single-tenant / private cloud, ITAR, IL4 / IL5, CMMC, on-premise deployment, or non-US / EMEA data hosting, set "flag" to true, set "flag_type", and keep the limitation visible in the answer (do not soften or omit it). End such answers with "[FLAG: needs legal/engineering sign-off]". Choose the flag_type by the nature of the gap: use "Compliance gap" for a missing certification, authorization, or audit scope (FedRAMP, IL4 / IL5, CMMC, ITAR, SOC 2 scope limits); use "Known gap" for an unavailable product capability (single-tenant / private cloud, on-premise, EMEA / non-US data hosting).
-3. Be direct. Plain, professional prose. No marketing language. Answer the question asked, then stop.
-4. Match the format. If the question is yes/no, lead with "Yes" or "No", then elaborate. If open-ended, write 2-4 sentences.
+3. Be direct and decisive. Give exactly ONE answer per question. Never present multiple options for the user to choose between — make the determination yourself. Plain, professional prose, no marketing language. Answer the question asked, then stop.
+4. Match the format and answer the actual question. If the question is yes/no, lead with "Yes" or "No". If it lists checkbox or multiple-choice options (e.g. "☐ Yes ☐ No", or a list of choices), pick the option(s) that apply and state them directly — do NOT echo the full list of options back. If open-ended, write 2-4 sentences. If it asks to attach or link a document, state that it will be provided (e.g. "Provided separately / available under NDA upon request").
 5. Cite your source. End each grounded answer with a parenthetical: "(Source: <library entry name>, last updated <date>)".
-6. If a question cannot be answered from the library, set "draft_answer" to null, "flag" to true, and "flag_type" to "No library match".
+6. Answer every question — do not leave any blank. Prefer the library and ground every factual claim in it. If the library does not cover a question, still give a concise, reasonable best-effort answer appropriate for a SaaS / AI vendor, set "flag" to true, and set "flag_type" to "No library match" so a human validates it. Never invent specific certifications, audit dates, customer names, URLs, or contractual commitments that are not in the library — if such a specific is unknown, answer conservatively (e.g. "Available under NDA upon request" or "To be confirmed by the Security team") and flag it.
 7. Preserve merge-variable placeholders. If a library entry contains a placeholder in [[double brackets]] (e.g. [[Client Name]]), keep it verbatim in your answer — it is filled in per project when the answer is used.
 
 For each question return:
@@ -111,4 +111,63 @@ ${questions.map((q, i) => `Q${i + 1}: ${q}`).join("\n\n")}`;
     throw new Error("Could not parse the model's structured response.");
   }
   return Array.isArray(parsed.answers) ? parsed.answers : [];
+}
+
+// ── Review-draft report formatting ────────────────────────────────────────────
+// Turns the completed (validated) answers + the original questionnaire into a
+// clean, paste-ready internal review document with checkbox rendering and
+// section grouping. Plain text output (no JSON schema).
+const REPORT_SYSTEM = `You format a completed security questionnaire into a clean INTERNAL REVIEW document. You are given the ORIGINAL questionnaire (with its section headers and checkbox options) and the ANSWERS. Produce plain text in EXACTLY this structure and nothing else:
+
+<Prospect> Security Questionnaire — Review Draft
+
+<Vendor>
+
+Prepared by <PreparedBy> | <Date> | FOR INTERNAL REVIEW
+
+Then, grouped by the questionnaire's own section headers and in the original order, for each section output a heading line:
+<Section Name> (Q<firstNumber>–Q<lastNumber>)
+
+and under it each question as:
+<number>. <question text without the checkbox glyphs>
+<the answer>
+
+Answer rendering rules:
+- Checkbox / multiple-choice questions: list EVERY option from the original question, each on its own line, prefixed with "☑ " if the answer selects it and "☐ " if not. Put any free-text explanation on its own line after the options.
+- Yes/No questions: render as the two (or three) options with ☑/☐.
+- Free-text questions: write the answer text directly (no checkboxes).
+- If a question asks for a URL or attachment, put it on its own line prefixed with "URL: " or "Attachment: ".
+- If an answer is marked flagged/unvalidated, append a line "  ↳ [VERIFY]".
+
+Hard rules: Use ONLY the facts in the provided answers — never invent new ones. Preserve the original numbering and section order exactly. Separate questions with a blank line. Output only the report — no preamble, no closing remarks.`;
+
+export async function draftReport({ questionnaire, answers, meta }) {
+  const client = new Anthropic();
+  const m = meta || {};
+  const answerBlock = (answers || [])
+    .map((a, i) => `${a.number || i + 1}. ${a.question}\nANSWER: ${a.answer || "(no answer)"}${a.flag ? `  [FLAGGED: ${a.flag_type || "verify"}]` : ""}`)
+    .join("\n\n");
+  const user = `PROSPECT: ${m.prospect || "Vendor"}
+VENDOR: ${m.vendor || ""}
+PREPARED BY: ${m.preparedBy || ""}
+DATE: ${m.date || ""}
+
+=== ORIGINAL QUESTIONNAIRE (verbatim, with sections + options) ===
+${questionnaire || "(not provided — group answers under a single \"Responses\" section)"}
+
+=== ANSWERS (in order) ===
+${answerBlock}`;
+
+  const stream = client.messages.stream({
+    model: MODEL,
+    max_tokens: 32000,
+    thinking: { type: "adaptive" },
+    system: [{ type: "text", text: REPORT_SYSTEM, cache_control: { type: "ephemeral" } }],
+    messages: [{ role: "user", content: user }],
+  });
+  const message = await stream.finalMessage();
+  if (message.stop_reason === "refusal") throw new Error("The model declined this request.");
+  const textBlock = message.content.find((b) => b.type === "text");
+  if (!textBlock || !textBlock.text) throw new Error("Model returned no report text.");
+  return textBlock.text;
 }

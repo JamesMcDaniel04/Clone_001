@@ -11,12 +11,21 @@ import { matchLibraryEntries } from "../../lib/libraryMatch.js";
 import { IconBook } from "../../components/icons.jsx";
 
 function parseQuestions(raw) {
-  return raw.split(/\n+/).map((l) => l.replace(/^[\d]+[.)]\s*/, "").trim()).filter((l) => l.length > 10);
+  const lines = raw.split(/\n+/).map((l) => l.trim()).filter(Boolean);
+  const numbered = lines.filter((l) => /^\d+[.)]\s/.test(l));
+  // Numbered questionnaire ("1. …", "2) …"): keep the numbered items and drop
+  // section headers / unnumbered context, so we get exactly one question per item.
+  if (numbered.length >= 3) {
+    return numbered.map((l) => l.replace(/^\d+[.)]\s*/, "").trim()).filter((l) => l.length > 4);
+  }
+  // Otherwise treat each substantial line as a question.
+  return lines.map((l) => l.replace(/^\d+[.)]\s*/, "").trim()).filter((l) => l.length > 10);
 }
 function statusFromDraft(d) {
   if (!d.flag) return "draft";
   if (d.flag_type === "Needs engineering") return "needs_engineering";
-  if (d.flag_type === "No library match") return "withheld";
+  // No-match answers are best-effort drafts to validate (only "withheld" when truly blank).
+  if (d.flag_type === "No library match") return d.draft_answer ? "draft" : "withheld";
   return "needs_legal";
 }
 
@@ -37,6 +46,8 @@ export default function Project() {
   const [draftScope, setDraftScope] = useState({ id: "all", name: "Full library" });
   const [libraryLabel, setLibraryLabel] = useState("Full library");
   const [matches, setMatches] = useState([]); // [{ question, entries }] shown live while drafting
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportBusy, setReportBusy] = useState(false);
 
   useEffect(() => {
     getProject(id).then(setProject).catch((e) => setErr(e.message));
@@ -106,6 +117,9 @@ export default function Project() {
     const scoped = draftScope.id === "all" ? libEntries : libEntries.filter((e) => e.category_id === draftScope.id);
     setMatches(parsed.map((q) => ({ question: q, entries: matchLibraryEntries(q, scoped) })));
     setLibraryLabel(draftScope.name);
+    // Persist the original questionnaire (sections + checkbox options) so the
+    // review-draft report can render it faithfully later.
+    updateProject(id, { notes: raw }).then(setProject).catch(() => {});
     setPhase("drafting");
     try {
       // Pass the live (scoped) library from the client so drafting grounds on
@@ -211,6 +225,59 @@ export default function Project() {
     setTimeout(() => setExportMsg(null), 3000);
   }
 
+  // Export every answer (not just approved) for pasting into a doc to validate.
+  function exportAll() {
+    const all = entries || [];
+    const lines = all.map((q, i) => {
+      const ans = resolveMV(q.edited_answer || q.draft_answer || "(no answer)");
+      const flag = q.flag ? `\n[⚠ ${q.flag_type || "Flag"}: ${q.flag_reason || "needs validation"}]` : "";
+      return `${i + 1}. ${q.question}\n${ans}${flag}`;
+    });
+    const blob = new Blob([lines.join("\n\n")], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `${project?.prospect || "project"}_all_${new Date().toISOString().slice(0, 10)}.txt`; a.click();
+    URL.revokeObjectURL(url);
+    setExportMsg(all.length ? `Exported all ${all.length} answer(s)` : "Nothing to export");
+    setTimeout(() => setExportMsg(null), 3000);
+  }
+
+  // Generate a formatted review-draft report (header · sections · ☑/☐ checkboxes)
+  // from the validated answers + the original questionnaire, then download it.
+  async function generateReport(meta) {
+    setReportBusy(true);
+    setErr(null);
+    try {
+      const answers = (entries || []).map((q, i) => ({
+        number: i + 1,
+        question: q.question,
+        answer: resolveMV(q.edited_answer || q.draft_answer || ""),
+        flag: !!q.flag,
+        flag_type: q.flag_type || null,
+      }));
+      const questionnaire = project?.notes || answers.map((a) => `${a.number}. ${a.question}`).join("\n");
+      const res = await fetch("/api/report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ questionnaire, answers, meta: { ...meta, prospect: project?.prospect || "Vendor" } }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Report failed");
+      const blob = new Blob([data.report], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `${project?.prospect || "project"}_review_draft_${new Date().toISOString().slice(0, 10)}.txt`; a.click();
+      URL.revokeObjectURL(url);
+      setReportOpen(false);
+      setExportMsg("Review-draft report generated.");
+      setTimeout(() => setExportMsg(null), 3000);
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setReportBusy(false);
+    }
+  }
+
   if (err && !project) return <div style={{ color: C.red, fontSize: 13 }}>{err}</div>;
   if (!project || entries == null) return <Spinner />;
 
@@ -245,6 +312,8 @@ export default function Project() {
         actions={
           <div style={{ display: "flex", gap: 8 }}>
             {!project.is_template && <Button onClick={saveAsTemplate}>Save as Template</Button>}
+            {hasEntries && <Button variant="primary" onClick={() => setReportOpen(true)}>Generate report</Button>}
+            {hasEntries && <Button onClick={exportAll}>Export all (.txt)</Button>}
             {hasEntries && <Button onClick={exportTxt}>Export approved (.txt)</Button>}
           </div>
         }
@@ -330,7 +399,37 @@ export default function Project() {
           }}
         />
       )}
+
+      {reportOpen && (
+        <ReportModal busy={reportBusy} onClose={() => setReportOpen(false)} onGenerate={generateReport} />
+      )}
     </div>
+  );
+}
+
+function ReportModal({ busy, onClose, onGenerate }) {
+  const [vendor, setVendor] = useState("People.ai, Inc.");
+  const [preparedBy, setPreparedBy] = useState("");
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  return (
+    <Modal title="Generate review-draft report" onClose={onClose}>
+      <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 14 }}>
+        Formats every answer into an internal review document — section groupings, ☑/☐ checkbox rendering, and a header — ready to paste into a doc.
+      </div>
+      <Field label="Vendor (your organization)">
+        <Input value={vendor} onChange={(e) => setVendor(e.target.value)} placeholder="People.ai, Inc. d/b/a Backstory" />
+      </Field>
+      <Field label="Prepared by">
+        <Input value={preparedBy} onChange={(e) => setPreparedBy(e.target.value)} placeholder="Your name" />
+      </Field>
+      <Field label="Date">
+        <Input value={date} onChange={(e) => setDate(e.target.value)} />
+      </Field>
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button variant="primary" disabled={busy} onClick={() => onGenerate({ vendor, preparedBy, date })}>{busy ? "Generating…" : "Generate report"}</Button>
+      </div>
+    </Modal>
   );
 }
 
