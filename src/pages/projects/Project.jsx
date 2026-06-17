@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useLocation } from "react-router-dom";
 import { C } from "../../lib/theme.js";
-import { getProject, getProjectEntries, insertProjectEntries, updateProjectEntry, createEntry, listMergeVariables, updateProject } from "../../lib/db.js";
+import { getProject, getProjectEntries, insertProjectEntries, updateProjectEntry, createEntry, listMergeVariables, updateProject, getLibraryText } from "../../lib/db.js";
 import { PageHeader, Button, Spinner } from "../../components/ui.jsx";
 import Stepper from "../../components/Stepper.jsx";
 import QuestionCard from "../../components/QuestionCard.jsx";
@@ -60,10 +60,13 @@ export default function Project() {
     setErr(null);
     setPhase("drafting");
     try {
+      // Pass the live library from the client (it can read it via the session) so
+      // drafting always grounds on Supabase, not the server fallback.
+      const library = await getLibraryText().catch(() => null);
       const res = await fetch("/api/draft", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ questions: parsed, prospect: project?.prospect || "Unknown" }),
+        body: JSON.stringify({ questions: parsed, prospect: project?.prospect || "Unknown", library }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Draft failed");

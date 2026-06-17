@@ -145,3 +145,20 @@ export async function countRows(table, filter) {
   if (error) throw new Error(error.message);
   return count ?? 0;
 }
+
+// ── Delete / update CRUD ─────────────────────────────────────────────────────
+export async function deleteProject(id) { unwrap(await supabase.from("projects").delete().eq("id", id)); }
+export async function deleteEntry(id) { unwrap(await supabase.from("library_entries").delete().eq("id", id)); }
+export async function updateCategory(id, fields) { return unwrap(await supabase.from("categories").update(fields).eq("id", id).select().single()); }
+export async function deleteCategory(id) { unwrap(await supabase.from("categories").delete().eq("id", id)); }
+export async function updateMergeVariable(id, fields) { return unwrap(await supabase.from("merge_variables").update(fields).eq("id", id).select().single()); }
+export async function deleteMergeVariable(id) { unwrap(await supabase.from("merge_variables").delete().eq("id", id)); }
+export async function deleteTag(id) { unwrap(await supabase.from("tags").delete().eq("id", id)); }
+
+// ── Prospects (managed in Settings) ──────────────────────────────────────────
+export async function listProspects() { return unwrap(await supabase.from("prospects").select("*").order("name")); }
+export async function createProspect(name) { return unwrap(await supabase.from("prospects").insert({ name }).select().single()); }
+export async function deleteProspect(id) { unwrap(await supabase.from("prospects").delete().eq("id", id)); }
+
+// ── Profiles (team members, for Settings/assignees) ──────────────────────────
+export async function listProfiles() { return unwrap(await supabase.from("profiles").select("id, full_name, email").order("full_name")); }

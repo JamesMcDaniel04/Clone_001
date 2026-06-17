@@ -1,27 +1,23 @@
 import { useEffect, useState } from "react";
 import { C } from "../../lib/theme.js";
-import { listTags, createTag } from "../../lib/db.js";
-import { PageHeader, Button, Spinner, Empty, Pill, Input } from "../../components/ui.jsx";
+import { listTags, createTag, deleteTag } from "../../lib/db.js";
+import { PageHeader, Button, Spinner, Empty, Input } from "../../components/ui.jsx";
 
 export default function Tags() {
   const [tags, setTags] = useState(null);
   const [err, setErr] = useState(null);
   const [name, setName] = useState("");
 
-  function load() {
-    listTags().then(setTags).catch((e) => setErr(e.message));
-  }
+  function load() { listTags().then(setTags).catch((e) => setErr(e.message)); }
   useEffect(load, []);
 
   async function add() {
     if (!name.trim()) return;
-    try {
-      await createTag(name.trim());
-      setName("");
-      load();
-    } catch (e) {
-      setErr(e.message);
-    }
+    try { await createTag(name.trim()); setName(""); load(); } catch (e) { setErr(e.message); }
+  }
+  async function remove(t) {
+    if (!confirm(`Delete tag "${t.name}"?`)) return;
+    try { await deleteTag(t.id); load(); } catch (e) { setErr(e.message); }
   }
 
   return (
@@ -38,7 +34,12 @@ export default function Tags() {
         <Empty title="No tags yet" />
       ) : (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {tags.map((t) => <Pill key={t.id} tone="info">{t.name}</Pill>)}
+          {tags.map((t) => (
+            <span key={t.id} style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "#fff", color: "#4B5563", border: "1px solid #E5E7EB", borderRadius: 8, padding: "5px 8px 5px 12px", fontSize: 12.5, fontWeight: 500 }}>
+              {t.name}
+              <button onClick={() => remove(t)} title="Delete tag" style={{ border: "none", background: "transparent", color: C.faint, cursor: "pointer", fontSize: 15, lineHeight: 1, padding: 0 }}>×</button>
+            </span>
+          ))}
         </div>
       )}
     </div>

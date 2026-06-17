@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { C } from "../../lib/theme.js";
 import { listProjectReviews, listProjects, listCategories, createEntry, updateEntry, updateProjectEntry, findLibraryEntryByQuestion } from "../../lib/db.js";
-import { PageHeader, Button, Spinner, Empty, Select, Input } from "../../components/ui.jsx";
+import { PageHeader, Button, Spinner, Empty, Select, Input, Pager } from "../../components/ui.jsx";
 import { IconBook } from "../../components/icons.jsx";
 
 // Reviews → From Projects: the repo of every answer drafted/edited in a project,
@@ -13,6 +13,7 @@ export default function FromProjects() {
   const [filters, setFilters] = useState({ projectId: "all", search: "", show: "all" });
   const [acted, setActed] = useState({}); // entryId -> { kind, msg }
   const [err, setErr] = useState(null);
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     listProjects().then(setProjects).catch(() => {});
@@ -24,6 +25,7 @@ export default function FromProjects() {
     listProjectReviews({ projectId: filters.projectId, search: filters.search }).then(setRows).catch((e) => setErr(e.message));
   }
   useEffect(load, [filters.projectId]);
+  useEffect(() => setPage(1), [rows, filters.show]);
 
   function mark(id, kind, msg) { setActed((a) => ({ ...a, [id]: { kind, msg } })); }
 
@@ -84,10 +86,11 @@ export default function FromProjects() {
           <Empty title="There are no Reviews matching your current filters" hint="Answer some questions in a Project, then they show up here to add to the library." />
         ) : (
           <>
-            <div style={{ fontSize: 12, color: C.muted, marginBottom: 12 }}>{visible.length} of {rows.length} entries</div>
-            {visible.map((entry) => (
+            <Pager page={page} total={visible.length} onPage={setPage} />
+            {visible.slice((page - 1) * 10, page * 10).map((entry) => (
               <ReviewCard key={entry.id} entry={entry} cats={cats} acted={acted[entry.id]} onAddNew={addAsNew} onUpdate={updateLibrary} onDismiss={dismiss} onSaveEdit={saveEdit} />
             ))}
+            <Pager page={page} total={visible.length} onPage={setPage} />
           </>
         )}
       </div>

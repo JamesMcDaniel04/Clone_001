@@ -19,12 +19,14 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { questions, prospect } = req.body || {};
+    const { questions, prospect, library: clientLibrary } = req.body || {};
     if (!Array.isArray(questions) || questions.length === 0) {
       return res.status(400).json({ error: "Provide a non-empty 'questions' array." });
     }
 
-    const library = (await getDbLibrary()) || (await getLibrary()).text;
+    // Prefer the library the client read (authenticated session); fall back to the
+    // server read, then the bundled library.
+    const library = clientLibrary || (await getDbLibrary()) || (await getLibrary()).text;
     const answers = await draftAnswers({ questions, prospect: prospect || "Unknown", library });
 
     return res.status(200).json({ answers });

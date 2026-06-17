@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { C, STATUS_DOT, STATUS_LABEL } from "../../lib/theme.js";
 import { listReviews, listCategories, updateEntry } from "../../lib/db.js";
-import { PageHeader, Spinner, Empty, Select, Input, StatusDot, Button } from "../../components/ui.jsx";
+import { PageHeader, Spinner, Empty, Select, Input, StatusDot, Button, Pager } from "../../components/ui.jsx";
 
 const STATUSES = ["all", "assigned", "unassigned", "approved_with_edits", "approved_without_edits", "never_reviewed"];
 
@@ -10,6 +10,7 @@ export default function Reviews() {
   const [filters, setFilters] = useState({ categoryId: "all", status: "all", search: "" });
   const [rows, setRows] = useState(null);
   const [err, setErr] = useState(null);
+  const [page, setPage] = useState(1);
 
   useEffect(() => { listCategories().then(setCats).catch(() => {}); }, []);
 
@@ -18,6 +19,7 @@ export default function Reviews() {
     listReviews(filters).then(setRows).catch((e) => setErr(e.message));
   }
   useEffect(load, [filters.categoryId, filters.status]);
+  useEffect(() => setPage(1), [rows]);
 
   return (
     <div>
@@ -47,7 +49,11 @@ export default function Reviews() {
       {rows == null ? <Spinner /> : rows.length === 0 ? (
         <Empty title="There are no Reviews matching your current filters" hint="Try adjusting or removing filters to see results" />
       ) : (
-        rows.map((r) => <ReviewRow key={r.id} row={r} onChange={load} />)
+        <>
+          <Pager page={page} total={rows.length} onPage={setPage} />
+          {rows.slice((page - 1) * 10, page * 10).map((r) => <ReviewRow key={r.id} row={r} onChange={load} />)}
+          <Pager page={page} total={rows.length} onPage={setPage} />
+        </>
       )}
     </div>
   );

@@ -110,6 +110,37 @@ export function Select({ style, children, ...props }) {
   );
 }
 
+function PagerBtn({ active, disabled, onClick, children }) {
+  return (
+    <button onClick={onClick} disabled={disabled} style={{
+      minWidth: 28, height: 28, padding: "0 7px", borderRadius: 7, fontSize: 12.5, fontFamily: "inherit",
+      border: `1px solid ${active ? C.blue : C.line}`, cursor: disabled ? "default" : "pointer",
+      background: active ? C.blue : "#fff", color: active ? "#fff" : disabled ? C.faint : C.body, fontWeight: active ? 600 : 500,
+    }}>{children}</button>
+  );
+}
+
+export function Pager({ page, pageSize = 10, total, onPage }) {
+  const pages = Math.max(1, Math.ceil(total / pageSize));
+  if (pages <= 1 && total <= pageSize) {
+    return <div style={{ fontSize: 12.5, color: C.muted, margin: "6px 0" }}>{total} result{total === 1 ? "" : "s"}</div>;
+  }
+  const from = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const to = Math.min(total, page * pageSize);
+  const start = Math.min(Math.max(0, page - 3), Math.max(0, pages - 5));
+  const nums = Array.from({ length: pages }, (_, i) => i + 1).slice(start, start + 5);
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "8px 0", fontSize: 12.5, color: C.muted }}>
+      <span>{from}–{to} of {total} results</span>
+      <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+        <PagerBtn disabled={page <= 1} onClick={() => onPage(page - 1)}>‹</PagerBtn>
+        {nums.map((p) => <PagerBtn key={p} active={p === page} onClick={() => onPage(p)}>{p}</PagerBtn>)}
+        <PagerBtn disabled={page >= pages} onClick={() => onPage(page + 1)}>›</PagerBtn>
+      </div>
+    </div>
+  );
+}
+
 export function Field({ label, children }) {
   return (
     <label style={{ display: "block", marginBottom: 14 }}>
