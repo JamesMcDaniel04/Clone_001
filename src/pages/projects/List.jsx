@@ -32,7 +32,8 @@ export default function List() {
   }
 
   const owners = [...new Set((rows || []).map((p) => p.owner?.full_name).filter(Boolean))];
-  const visible = (rows || []).filter((p) => {
+  const projectRows = (rows || []).filter((p) => !p.is_template);
+  const visible = projectRows.filter((p) => {
     if (filters.status !== "all" && p.status !== filters.status) return false;
     if (filters.owner !== "all" && p.owner?.full_name !== filters.owner) return false;
     if (filters.search && !(`${p.name} ${p.prospect || ""}`.toLowerCase().includes(filters.search.toLowerCase()))) return false;
@@ -67,11 +68,11 @@ export default function List() {
       </aside>
 
       <div>
-        <PageHeader title="Projects" subtitle="Each project is a questionnaire or RFP you're answering." actions={<Button variant="primary" onClick={() => setAdding(true)}>+ Create a Project</Button>} />
+        <PageHeader title="Projects" actions={<Button variant="primary" onClick={() => setAdding(true)}>Create a New Project</Button>} />
         {err && <div style={{ color: C.red, fontSize: 13, marginBottom: 12 }}>{err}</div>}
 
         {rows == null ? <Spinner /> : visible.length === 0 ? (
-          <Empty title={rows.length ? "No results match your query" : "No projects yet"} hint={rows.length ? "Try adjusting or removing filters." : "Create one to start drafting answers."} />
+          <Empty title={projectRows.length ? "No results match your query" : "No projects yet"} hint={projectRows.length ? "Try adjusting or removing filters." : "Create one to start drafting answers."} />
         ) : (
           <div style={{ background: "#fff", border: `1px solid ${C.cardLine}`, borderRadius: 14, overflow: "hidden" }}>
             {visible.map((p) => (

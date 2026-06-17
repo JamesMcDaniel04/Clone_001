@@ -1,18 +1,17 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { C } from "../lib/theme.js";
-import { listProjects, listReviews } from "../lib/db.js";
+import { listProjects } from "../lib/db.js";
 import { Card, Button, Spinner, Empty } from "../components/ui.jsx";
 
 export default function Home() {
   const nav = useNavigate();
   const [projects, setProjects] = useState(null);
-  const [reviews, setReviews] = useState(null);
   const [err, setErr] = useState(null);
 
   useEffect(() => {
-    Promise.all([listProjects(), listReviews({ status: "never_reviewed" })])
-      .then(([p, r]) => { setProjects(p); setReviews(r); })
+    listProjects()
+      .then(setProjects)
       .catch((e) => setErr(e.message));
   }, []);
 
@@ -48,16 +47,7 @@ export default function Home() {
       </Section>
 
       <Section title="My Reviews">
-        {reviews == null ? <Spinner /> : reviews.length === 0 ? (
-          <Empty title="No reviews at the moment." />
-        ) : (
-          reviews.slice(0, 8).map((r) => (
-            <Row key={r.id} onClick={() => nav("/reviews")}>
-              <div style={{ fontSize: 13.5, color: C.ink, lineHeight: 1.4 }}>{r.question}</div>
-              <span style={{ fontSize: 12, color: C.muted, whiteSpace: "nowrap" }}>{r.category?.name || "No Category"}</span>
-            </Row>
-          ))
-        )}
+        <Empty title="No reviews have been completed yet." hint="Reviewed answers will appear here after the team starts approving library or project responses." />
       </Section>
     </div>
   );

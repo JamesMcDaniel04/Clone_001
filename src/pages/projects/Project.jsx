@@ -29,6 +29,7 @@ export default function Project() {
   const [importOpen, setImportOpen] = useState(false);
   const [exportMsg, setExportMsg] = useState(null);
   const [mergeVars, setMergeVars] = useState([]);
+  const [templateEntryOpen, setTemplateEntryOpen] = useState(false);
 
   useEffect(() => {
     getProject(id).then(setProject).catch((e) => setErr(e.message));
@@ -49,6 +50,24 @@ export default function Project() {
       setExportMsg("Saved as a template — it'll appear under Available Templates when creating a project.");
       setTimeout(() => setExportMsg(null), 3500);
     } catch (e) { setErr(e.message); }
+  }
+
+  async function publishTemplate() {
+    try {
+      const updated = await updateProject(id, { is_template: true, status: "approved" });
+      setProject(updated);
+      setExportMsg("Project template published.");
+      setTimeout(() => setExportMsg(null), 3000);
+    } catch (e) { setErr(e.message); }
+  }
+
+  function downloadTemplate() {
+    const lines = (entries || []).map((q, i) => `${i + 1}. ${q.question}`).join("\n");
+    const blob = new Blob([lines || `${project?.name || "Template"}\n`], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `${project?.name || "template"}_template.txt`; a.click();
+    URL.revokeObjectURL(url);
   }
 
   // Resolve [[merge variable]] tokens against this project (client name, etc.).
@@ -111,6 +130,22 @@ export default function Project() {
     } catch (e) { setErr("Could not save to library: " + e.message); }
   }
 
+  async function addTemplateEntry(question) {
+    try {
+      const saved = await insertProjectEntries([{
+        project_id: id,
+        question_id: `T${(entries || []).length + 1}`,
+        question,
+        draft_answer: null,
+        edited_answer: null,
+        status: "draft",
+        position: (entries || []).length,
+      }]);
+      setEntries((prev) => [...(prev || []), ...saved]);
+      setTemplateEntryOpen(false);
+    } catch (e) { setErr(e.message); }
+  }
+
   function exportTxt() {
     const approved = (entries || []).filter((q) => q.status === "approved");
     const lines = approved.map((q, i) => `Q${i + 1}: ${q.question}\n\nA: ${resolveMV(q.edited_answer)}\n\n${q.flag ? "⚠ FLAGGED: " + (q.flag_reason || "") + "\n" : ""}---`);
@@ -129,6 +164,23 @@ export default function Project() {
   const hasEntries = entries.length > 0;
   const approved = entries.filter((q) => q.status === "approved").length;
   const flagged = entries.filter((q) => q.flag).length;
+
+  if (project.is_template) {
+    return (
+      <TemplateWorkspace
+        project={project}
+        entries={entries}
+        err={err}
+        exportMsg={exportMsg}
+        onDownload={downloadTemplate}
+        onPublish={publishTemplate}
+        onAddEntry={() => setTemplateEntryOpen(true)}
+        templateEntryOpen={templateEntryOpen}
+        onCloseEntry={() => setTemplateEntryOpen(false)}
+        onCreateEntry={addTemplateEntry}
+      />
+    );
+  }
 
   return (
     <div>
