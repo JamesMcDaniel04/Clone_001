@@ -39,6 +39,23 @@ export async function updateEntry(id, fields) {
   return unwrap(await supabase.from("library_entries").update(fields).eq("id", id).select().single());
 }
 
+// The whole library as a formatted text block (grouped by category) for grounding
+// the drafting API. The signed-in client can always read this, so we pass it to
+// /api/draft rather than relying on the server key to bypass RLS.
+export async function getLibraryText() {
+  const data = unwrap(
+    await supabase.from("library_entries").select("question, answer, category:category_id(name)").not("answer", "is", null).limit(2000)
+  );
+  if (!data.length) return null;
+  const byCat = new Map();
+  for (const row of data) {
+    const cat = row.category?.name || "General";
+    if (!byCat.has(cat)) byCat.set(cat, []);
+    byCat.get(cat).push(`**${row.question}**\n${row.answer}`);
+  }
+  return [...byCat.entries()].map(([c, items]) => `### ${c}\n\n${items.join("\n\n")}`).join("\n\n");
+}
+
 // ── Tags ────────────────────────────────────────────────────────────────────
 export async function listTags() {
   return unwrap(await supabase.from("tags").select("*").order("name"));
@@ -69,6 +86,9 @@ export async function createProject(fields) {
 }
 export async function getProject(id) {
   return unwrap(await supabase.from("projects").select("*").eq("id", id).single());
+}
+export async function updateProject(id, fields) {
+  return unwrap(await supabase.from("projects").update(fields).eq("id", id).select().single());
 }
 export async function getProjectEntries(projectId) {
   return unwrap(

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { C } from "../../lib/theme.js";
 import { useSession } from "../../auth/SessionProvider.jsx";
-import { listProjects, createProject } from "../../lib/db.js";
+import { listProjects, createProject, getProjectEntries } from "../../lib/db.js";
 import { PageHeader, Button, Spinner, Empty, Modal, Field, Input, Select } from "../../components/ui.jsx";
 
 const PROSPECTS = ["Cvent", "Govini", "AdaIQ", "Energy Toolbase", "Other"];
@@ -79,7 +79,10 @@ export default function List() {
                   <div style={{ fontSize: 14, fontWeight: 600, color: C.ink }}>{p.name}</div>
                   <div style={{ fontSize: 12, color: C.muted }}>{p.prospect || "—"} · {p.entries?.[0]?.count ?? 0} questions{p.owner?.full_name ? ` · ${p.owner.full_name}` : ""} · {p.created_at?.slice(0, 10)}</div>
                 </div>
-                <StatusTag status={p.status} />
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  {p.is_template && <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 6, background: "#EDE9FE", color: "#5B21B6" }}>Template</span>}
+                  <StatusTag status={p.status} />
+                </div>
               </div>
             ))}
           </div>
@@ -90,7 +93,7 @@ export default function List() {
         <CreateProjectModal
           user={user}
           onClose={() => { setAdding(false); params.delete("new"); setParams(params); }}
-          onCreated={(p) => nav(`/projects/${p.id}`)}
+          onCreated={(p, prefillQuestions) => nav(`/projects/${p.id}`, { state: { prefillQuestions } })}
           onError={setErr}
           templates={(rows || []).filter((p) => p.is_template)}
         />
@@ -118,15 +121,20 @@ function CreateProjectModal({ user, onClose, onCreated, onError, templates }) {
     if (!draft.name.trim()) return;
     setBusy(true);
     try {
-      const tmpl = templates.find((t) => t.id === fromTemplateId);
       const p = await createProject({
         name: draft.name.trim(),
         prospect: draft.prospect,
         owner_id: user?.id || null,
         status: "draft",
-        notes: tmpl ? `Created from template: ${tmpl.name}` : null,
       });
-      onCreated(p);
+      // Using a template copies its questions into the new project's draft box, ready
+      // to re-draft against this prospect. (Prior answers are intentionally not carried over.)
+      let prefillQuestions = [];
+      if (fromTemplateId) {
+        const src = await getProjectEntries(fromTemplateId);
+        prefillQuestions = src.map((e) => e.question).filter(Boolean);
+      }
+      onCreated(p, prefillQuestions);
     } catch (e) { onError(e.message); setBusy(false); }
   }
 

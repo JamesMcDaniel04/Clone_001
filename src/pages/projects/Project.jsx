@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useLocation } from "react-router-dom";
 import { C } from "../../lib/theme.js";
-import { getProject, getProjectEntries, insertProjectEntries, updateProjectEntry, createEntry, listMergeVariables } from "../../lib/db.js";
+import { getProject, getProjectEntries, insertProjectEntries, updateProjectEntry, createEntry, listMergeVariables, updateProject } from "../../lib/db.js";
 import { PageHeader, Button, Spinner } from "../../components/ui.jsx";
 import Stepper from "../../components/Stepper.jsx";
 import QuestionCard from "../../components/QuestionCard.jsx";
@@ -20,6 +20,7 @@ function statusFromDraft(d) {
 
 export default function Project() {
   const { id } = useParams();
+  const location = useLocation();
   const [project, setProject] = useState(null);
   const [entries, setEntries] = useState(null);
   const [raw, setRaw] = useState("");
@@ -34,6 +35,21 @@ export default function Project() {
     getProjectEntries(id).then(setEntries).catch((e) => setErr(e.message));
     listMergeVariables().then(setMergeVars).catch(() => {});
   }, [id]);
+
+  // Pre-fill the draft box from a template's questions (passed via navigation state).
+  useEffect(() => {
+    const pre = location.state?.prefillQuestions;
+    if (pre && pre.length) setRaw(pre.join("\n"));
+  }, []);
+
+  async function saveAsTemplate() {
+    try {
+      const updated = await updateProject(id, { is_template: true });
+      setProject(updated);
+      setExportMsg("Saved as a template — it'll appear under Available Templates when creating a project.");
+      setTimeout(() => setExportMsg(null), 3500);
+    } catch (e) { setErr(e.message); }
+  }
 
   // Resolve [[merge variable]] tokens against this project (client name, etc.).
   const { resolve: resolveMV } = buildResolver(mergeVars, project);
@@ -115,8 +131,13 @@ export default function Project() {
     <div>
       <PageHeader
         title={project.name}
-        subtitle={`${project.prospect || "—"} · ${entries.length} questions`}
-        actions={hasEntries ? <Button onClick={exportTxt}>Export approved (.txt)</Button> : null}
+        subtitle={`${project.prospect || "—"} · ${entries.length} questions${project.is_template ? " · Template" : ""}`}
+        actions={
+          <div style={{ display: "flex", gap: 8 }}>
+            {!project.is_template && <Button onClick={saveAsTemplate}>Save as Template</Button>}
+            {hasEntries && <Button onClick={exportTxt}>Export approved (.txt)</Button>}
+          </div>
+        }
       />
       {err && <div style={{ color: C.red, fontSize: 13, marginBottom: 12 }}>{err}</div>}
       {exportMsg && <div style={{ background: C.greenSoft, color: "#15803D", fontSize: 13, padding: "9px 14px", borderRadius: 9, marginBottom: 14, border: "1px solid #BBE7CB" }}>{exportMsg}</div>}
