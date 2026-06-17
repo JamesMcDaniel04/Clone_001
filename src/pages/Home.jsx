@@ -1,17 +1,14 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { C } from "../lib/theme.js";
-import { useSession, userDisplay } from "../auth/SessionProvider.jsx";
 import { listProjects, listReviews } from "../lib/db.js";
 import { Card, Button, Spinner, Empty } from "../components/ui.jsx";
 
 export default function Home() {
-  const { user } = useSession();
   const nav = useNavigate();
   const [projects, setProjects] = useState(null);
   const [reviews, setReviews] = useState(null);
   const [err, setErr] = useState(null);
-  const name = userDisplay(user).name?.split(" ")[0] || "there";
 
   useEffect(() => {
     Promise.all([listProjects(), listReviews({ status: "never_reviewed" })])
@@ -23,10 +20,10 @@ export default function Home() {
     <div>
       <div style={{ background: C.navy, borderRadius: 16, padding: "26px 28px", marginBottom: 24, color: "#fff", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <div style={{ width: 44, height: 44, borderRadius: "50%", background: C.navyHi, border: `1px solid ${C.navyLine}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700 }}>{userDisplay(user).initials}</div>
+          <div style={{ width: 44, height: 44, borderRadius: "50%", background: C.navyHi, border: `1px solid ${C.navyLine}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700 }}>CL</div>
           <div>
             <div style={{ fontSize: 13, color: C.navyText }}>Welcome,</div>
-            <div style={{ fontSize: 20, fontWeight: 650 }}>{name} 👋</div>
+            <div style={{ fontSize: 20, fontWeight: 650 }}>team</div>
           </div>
         </div>
         <Button variant="primary" onClick={() => nav("/projects?new=1")} style={{ background: "#fff", color: C.navy, border: "none" }}>Create a New Project</Button>
@@ -36,7 +33,7 @@ export default function Home() {
 
       <Section title="My Project Tasks">
         {projects == null ? <Spinner /> : projects.length === 0 ? (
-          <Empty title="You don't have any Project Tasks right now. Dance party! 🕺" />
+          <Empty title="No project tasks right now." />
         ) : (
           projects.slice(0, 6).map((p) => (
             <Row key={p.id} onClick={() => nav(`/projects/${p.id}`)}>
@@ -52,7 +49,7 @@ export default function Home() {
 
       <Section title="My Reviews">
         {reviews == null ? <Spinner /> : reviews.length === 0 ? (
-          <Empty title="No Reviews at the moment. Time for coffee? ☕" />
+          <Empty title="No reviews at the moment." />
         ) : (
           reviews.slice(0, 8).map((r) => (
             <Row key={r.id} onClick={() => nav("/reviews")}>

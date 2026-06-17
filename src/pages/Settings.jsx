@@ -1,23 +1,18 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { C } from "../lib/theme.js";
-import { useSession, userDisplay } from "../auth/SessionProvider.jsx";
-import { listProspects, createProspect, deleteProspect, listProfiles } from "../lib/db.js";
-import { ALLOWED_DOMAIN } from "../lib/supabaseClient.js";
+import { listProspects, createProspect, deleteProspect } from "../lib/db.js";
 import { PageHeader, Card, Button, Spinner, Input } from "../components/ui.jsx";
 
 export default function Settings() {
-  const { user } = useSession();
-  const u = userDisplay(user);
   const [prospects, setProspects] = useState(null);
-  const [profiles, setProfiles] = useState([]);
   const [name, setName] = useState("");
   const [pErr, setPErr] = useState(null);
 
   function loadProspects() {
     listProspects().then(setProspects).catch((e) => { setProspects([]); setPErr(e.message); });
   }
-  useEffect(() => { loadProspects(); listProfiles().then(setProfiles).catch(() => {}); }, []);
+  useEffect(() => { loadProspects(); }, []);
 
   async function add() {
     if (!name.trim()) return;
@@ -29,14 +24,14 @@ export default function Settings() {
 
   return (
     <div style={{ maxWidth: 760 }}>
-      <PageHeader title="Settings" subtitle="Manage prospects, your team, and app configuration." actions={<Link to="/setup" style={{ textDecoration: "none" }}><Button>Run setup wizard</Button></Link>} />
+      <PageHeader title="Settings" subtitle="Manage prospects and app configuration." actions={<Link to="/setup" style={{ textDecoration: "none" }}><Button>Run setup wizard</Button></Link>} />
 
-      <Section title="Your profile">
+      <Section title="Workspace">
         <Card style={{ padding: "16px 18px", display: "flex", alignItems: "center", gap: 14 }}>
-          <span style={{ width: 40, height: 40, borderRadius: "50%", background: C.navy, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700 }}>{u.initials}</span>
+          <span style={{ width: 40, height: 40, borderRadius: "50%", background: C.navy, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700 }}>CL</span>
           <div>
-            <div style={{ fontSize: 14, fontWeight: 600, color: C.ink }}>{u.name}</div>
-            <div style={{ fontSize: 12.5, color: C.muted }}>{u.email || (user?.is_anonymous ? "Anonymous test session" : "—")}</div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: C.ink }}>Shared workspace</div>
+            <div style={{ fontSize: 12.5, color: C.muted }}>Everyone using this deployment sees the same projects, reviews, and answer library.</div>
           </div>
         </Card>
       </Section>
@@ -64,20 +59,10 @@ export default function Settings() {
         </Card>
       </Section>
 
-      <Section title="Team">
-        <Card style={{ padding: "8px 6px" }}>
-          {profiles.length === 0 ? <div style={{ padding: 12, fontSize: 13, color: C.muted }}>No teammates have signed in yet.</div> : profiles.map((p) => (
-            <div key={p.id} style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px", borderBottom: `1px solid ${C.line}`, fontSize: 13 }}>
-              <span style={{ color: C.ink }}>{p.full_name || "—"}</span><span style={{ color: C.muted }}>{p.email}</span>
-            </div>
-          ))}
-        </Card>
-      </Section>
-
       <Section title="Configuration">
         <Card style={{ padding: "8px 6px" }}>
-          <Row label="Sign-in restriction" value={ALLOWED_DOMAIN ? `@${ALLOWED_DOMAIN} only` : "Any Google account"} />
-          <Row label="Auth mode" value={import.meta.env.VITE_DISABLE_AUTH === "true" ? "Test mode (anonymous, no login)" : "Google sign-in"} />
+          <Row label="Access mode" value="Shared anonymous sessions" />
+          <Row label="Login screen" value="Disabled" />
           <Row label="Drafting model" value="Set server-side via ANTHROPIC_MODEL (default claude-opus-4-8)" last />
         </Card>
       </Section>

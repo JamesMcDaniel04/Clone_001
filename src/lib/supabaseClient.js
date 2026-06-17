@@ -10,6 +10,3 @@ export const isSupabaseConfigured = Boolean(url && anon && !url.includes("YOURPR
 export const supabase = isSupabaseConfigured
   ? createClient(url, anon, { auth: { persistSession: true, autoRefreshToken: true } })
   : null;
-
-// Optional: lock sign-in to one email domain (e.g. "people.ai").
-export const ALLOWED_DOMAIN = (import.meta.env.VITE_ALLOWED_EMAIL_DOMAIN || "").trim();

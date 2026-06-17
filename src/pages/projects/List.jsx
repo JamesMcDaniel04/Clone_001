@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { C } from "../../lib/theme.js";
-import { useSession } from "../../auth/SessionProvider.jsx";
 import { listProjects, createProject, getProjectEntries, deleteProject, updateProject, listProspects } from "../../lib/db.js";
 import { PageHeader, Button, Spinner, Empty, Modal, Field, Input, Select } from "../../components/ui.jsx";
 
@@ -10,7 +9,6 @@ const STATUS_LABEL = { draft: "Draft", in_review: "In review", legal_flagged: "L
 
 export default function List() {
   const nav = useNavigate();
-  const { user } = useSession();
   const [params, setParams] = useSearchParams();
   const [rows, setRows] = useState(null);
   const [err, setErr] = useState(null);
@@ -96,7 +94,6 @@ export default function List() {
 
       {adding && (
         <CreateProjectModal
-          user={user}
           prospects={prospects}
           templates={(rows || []).filter((p) => p.is_template)}
           onClose={() => { setAdding(false); params.delete("new"); setParams(params); }}
@@ -143,7 +140,7 @@ function EditProjectModal({ project, prospects, onClose, onSave }) {
   );
 }
 
-function CreateProjectModal({ user, prospects, onClose, onCreated, onError, templates }) {
+function CreateProjectModal({ prospects, onClose, onCreated, onError, templates }) {
   const [draft, setDraft] = useState({ name: "", prospect: prospects[0] || "Govini" });
   const [templateId, setTemplateId] = useState("");
   const [busy, setBusy] = useState(false);
@@ -152,7 +149,7 @@ function CreateProjectModal({ user, prospects, onClose, onCreated, onError, temp
     if (!draft.name.trim()) return;
     setBusy(true);
     try {
-      const p = await createProject({ name: draft.name.trim(), prospect: draft.prospect, owner_id: user?.id || null, status: "draft" });
+      const p = await createProject({ name: draft.name.trim(), prospect: draft.prospect, owner_id: null, status: "draft" });
       let prefillQuestions = [];
       if (fromTemplateId) {
         const src = await getProjectEntries(fromTemplateId);

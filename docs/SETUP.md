@@ -1,30 +1,29 @@
 # Clone — Setup Guide
 
-From an empty machine to a live, signed-in platform. The app needs three services: **Supabase**
-(database + Google sign-in), **Anthropic** (drafting), and **Vercel** (hosting).
+From an empty machine to a live shared workspace. The app needs three services: **Supabase**
+(database + anonymous sessions), **Anthropic** (drafting), and **Vercel** (hosting).
 
 ## 0. Prerequisites
 
 - Node 18+ (`node --version`)
 - A [Supabase](https://supabase.com) project (free tier is fine)
-- A Google Cloud OAuth client (for sign-in) — or use Supabase's built-in Google provider setup
 - An [Anthropic API key](https://console.anthropic.com/settings/keys)
 - A [Vercel](https://vercel.com) account
 
 ---
 
-## 1. Supabase — database + auth
+## 1. Supabase — database + anonymous sessions
 
 1. Create a new Supabase project. Note the **Project URL** and the **anon** and **service_role**
    keys (Project Settings → API).
 2. Open the **SQL Editor** and run, in order:
    - `supabase/migrations/0001_init.sql` (schema + Row-Level Security)
+   - `supabase/migrations/0002_prospects.sql` (prospects/clients table)
    - `supabase/seed.sql` (categories + starter InfoSec library so the app isn't empty)
    *(or `supabase db push` + `supabase db reset` if you use the Supabase CLI.)*
-3. **Authentication → Providers → Google:** enable it. Add your Google OAuth client ID/secret
-   (create one at console.cloud.google.com → Credentials → OAuth client → Web application).
-4. **Authentication → URL Configuration:** add your redirect URLs —
-   `http://localhost:3000` for local dev and your Vercel URL for production.
+3. **Authentication → Sign In / Providers → Anonymous Sign-Ins:** enable anonymous sign-ins.
+   The app creates an anonymous Supabase session automatically so RLS policies still apply
+   without showing a login screen.
 
 ---
 
@@ -41,7 +40,6 @@ Fill in `.env.local`:
 |---|---|
 | `VITE_SUPABASE_URL` | Supabase → Settings → API → Project URL |
 | `VITE_SUPABASE_ANON_KEY` or `VITE_SUPABASE_PUBLISHABLE_KEY` | Supabase → Settings → API → anon/public publishable key (public, RLS-protected) |
-| `VITE_ALLOWED_EMAIL_DOMAIN` | e.g. `people.ai` to restrict sign-in (blank = any Google account) |
 | `SUPABASE_URL` | same Project URL (server-side, for the drafting API) |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Settings → API → service_role key (**secret**) |
 | `ANTHROPIC_API_KEY` | Anthropic console |
@@ -56,9 +54,9 @@ npm i -g vercel
 vercel dev          # runs the UI + the /api functions together (reads .env.local)
 ```
 
-Open `http://localhost:3000`, sign in with Google, and you'll land on Home. Library Management
-shows the seeded categories; create a Project, paste questions, and **Draft answers** runs Claude
-grounded on your Supabase library.
+Open `http://localhost:3000` and you'll land on Home. Library Management shows the seeded
+categories; create a Project, paste questions, and **Draft answers** runs Claude grounded on your
+Supabase library.
 
 > `npm run dev` runs the **UI only** (no `/api`), so drafting needs `vercel dev` or a deploy.
 > Before Supabase is configured, the app renders a "Connect Supabase" notice instead of crashing.
@@ -73,15 +71,15 @@ vercel --prod   # deploy
 ```
 
 Add every variable from step 2 in **Vercel → Project → Settings → Environment Variables** (Production
-+ Preview), then redeploy. Add your Vercel URL to Supabase's redirect URLs (step 1.4). Share the URL.
++ Preview), then redeploy. Share the URL only with people who should access the shared workspace.
 
 ---
 
 ## 5. Restrict access to your team
 
-- **`VITE_ALLOWED_EMAIL_DOMAIN`** — the app blocks anyone whose Google email isn't on this domain.
-- **Supabase Google provider** — only accounts that can complete Google OAuth get a session.
-- **Optional — Vercel Deployment Protection** (Settings → Deployment Protection) adds an outer gate.
+This app does not show a login screen. Anyone who can load the deployed URL can create an anonymous
+session and read/write the shared workspace. Use **Vercel Deployment Protection** or another outer
+gate if the deployment should only be available to two or three people.
 
 ---
 
@@ -96,7 +94,7 @@ Bulk Excel/CSV import in the UI is on the roadmap (see below).
 
 ## 7. What's built vs. on the roadmap
 
-**Built:** Google auth gate · Home dashboard · Library Management (categories, entries, search,
+**Built:** Shared anonymous access · Home dashboard · Library Management (categories, entries, search,
 merge variables, tags) · Reviews queue with filters · Projects (create, paste/parse questions, AI
 drafting grounded on the library, review/flag/edit/approve, promote to library, `.txt` export).
 
@@ -111,6 +109,7 @@ assignment notifications · usage analytics · bulk CSV import UI.
 | `src/` | React app (pages, components, auth, data helpers) |
 | `api/` | Vercel functions — `draft` (Claude, grounded on Supabase) |
 | `supabase/migrations/0001_init.sql` | Schema + RLS |
+| `supabase/migrations/0002_prospects.sql` | Prospects/clients table |
 | `supabase/seed.sql` | Starter categories + library |
 | `docs/DATA_MODEL.md` | Table-by-table data model |
 | `.env.example` | Every environment variable, documented |

@@ -1,9 +1,10 @@
 # Clone — Data Model
 
 Postgres on Supabase. Full DDL is in [`supabase/migrations/0001_init.sql`](../supabase/migrations/0001_init.sql).
-Every content table has **Row-Level Security** enabled with a single policy: any authenticated user
-(gated to your domain at the Google-OAuth + app layer) may read/write. Tighten later if you add
-external collaborators.
+Every content table has **Row-Level Security** enabled with a single policy: any authenticated
+Supabase session may read/write. The app creates anonymous sessions automatically so the deployment
+acts as one shared workspace. Add an outer gate such as Vercel Deployment Protection if the URL
+must be limited to a small team.
 
 ## Tables
 
