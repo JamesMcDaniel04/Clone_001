@@ -25,7 +25,7 @@ For each question return:
 - draft_answer: the drafted answer, or null if there is no library match.
 - flag: true if the answer needs human sign-off (known gap, legal, engineering, or no match).
 - flag_reason: a one-sentence explanation when flag is true, otherwise null.
-- flag_type: one of "Needs legal", "Needs engineering", "Compliance gap", "Known gap", "No library match", or null when flag is false.
+- flag_type: one of "Needs legal", "Needs engineering", "Compliance gap", "Known gap", "No library match", or "None" when flag is false.
 - library_entries_used: the exact names of the library entries the answer drew on.`;
 
 // JSON Schema for structured outputs. Every object sets additionalProperties:false
@@ -46,8 +46,8 @@ const ANSWER_SCHEMA = {
           flag: { type: "boolean" },
           flag_reason: { type: ["string", "null"] },
           flag_type: {
-            type: ["string", "null"],
-            enum: ["Needs legal", "Needs engineering", "Compliance gap", "Known gap", "No library match", null],
+            type: "string",
+            enum: ["None", "Needs legal", "Needs engineering", "Compliance gap", "Known gap", "No library match"],
           },
           library_entries_used: { type: "array", items: { type: "string" } },
         },

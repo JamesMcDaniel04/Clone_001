@@ -46,13 +46,15 @@ export default function Project() {
     listCategories().then(setCategories).catch(() => {});
   }, [id]);
 
-  // entry name → category name, for deriving each answer's category from the
-  // library entries the model grounded on (q.library_entries_used).
-  const catByName = new Map(libEntries.map((e) => [e.question, e.category?.name || "General"]));
-  function categoryForEntry(usedNames) {
-    if (!usedNames?.length) return "Vendor security";
+  // Derive an answer's category from the question itself, using the same
+  // deterministic matcher that drives the live "Library matched" step — the
+  // dominant category among the top matched library entries. Robust across
+  // reloads (depends only on the persisted question + the live library).
+  function categoryForEntry(q) {
+    const matched = matchLibraryEntries(q.question, libEntries);
+    if (!matched.length) return "Vendor security";
     const counts = {};
-    for (const n of usedNames) { const c = catByName.get(n); if (c) counts[c] = (counts[c] || 0) + 1; }
+    for (const e of matched) { const c = e.category?.name; if (c) counts[c] = (counts[c] || 0) + 1; }
     const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
     return top ? top[0] : "Vendor security";
   }
@@ -314,7 +316,7 @@ export default function Project() {
             <Stat label="Flagged" value={flagged} tone="tan" />
           </div>
           {entries.map((q, i) => (
-            <QuestionCard key={q.id || i} q={q} idx={i} prospect={project.prospect} category={categoryForEntry(q.library_entries_used)} libraryLabel={libraryLabel} resolve={resolveMV} onStatusChange={handleStatusChange} onAnswerEdit={handleAnswerEdit} onPromote={handlePromote} onDelete={removeProjectEntry} />
+            <QuestionCard key={q.id || i} q={q} idx={i} prospect={project.prospect} category={categoryForEntry(q)} libraryLabel={libraryLabel} resolve={resolveMV} onStatusChange={handleStatusChange} onAnswerEdit={handleAnswerEdit} onPromote={handlePromote} onDelete={removeProjectEntry} />
           ))}
         </div>
       )}
