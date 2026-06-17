@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { C, STATUS_DOT, STATUS_LABEL } from "../../lib/theme.js";
-import { listReviews, listCategories, updateEntry } from "../../lib/db.js";
+import { listReviews, listCategories, updateEntry, deleteEntry } from "../../lib/db.js";
 import { PageHeader, Spinner, Empty, Select, Input, StatusDot, Button, Pager } from "../../components/ui.jsx";
 
 const STATUSES = ["all", "assigned", "unassigned", "approved_with_edits", "approved_without_edits", "never_reviewed"];
@@ -69,41 +69,66 @@ function Labeled({ label, children }) {
 }
 
 function ReviewRow({ row, onChange }) {
+  const [editing, setEditing] = useState(false);
+  const [q, setQ] = useState(row.question);
+  const [a, setA] = useState(row.answer || "");
+
   async function setStatus(status) {
     try {
       const fields = { status };
       if (status.startsWith("approved")) fields.reviewed_at = new Date().toISOString();
       await updateEntry(row.id, fields);
       onChange();
-    } catch (e) {
-      alert(e.message);
-    }
+    } catch (e) { alert(e.message); }
   }
+  async function save() {
+    try { await updateEntry(row.id, { question: q, answer: a }); setEditing(false); onChange(); } catch (e) { alert(e.message); }
+  }
+  async function remove() {
+    if (!confirm("Delete this library entry?")) return;
+    try { await deleteEntry(row.id); onChange(); } catch (e) { alert(e.message); }
+  }
+
+  const iconBtn = { fontSize: 11.5, padding: "5px 11px", borderRadius: 7, border: `1px solid ${C.line}`, background: "#fff", color: C.body, cursor: "pointer", fontFamily: "inherit" };
 
   return (
     <div style={{ background: "#fff", border: `1px solid ${C.cardLine}`, borderRadius: 12, padding: "14px 16px", marginBottom: 10 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 14, alignItems: "flex-start" }}>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: C.ink, marginBottom: 3 }}>{row.question}</div>
-          <div style={{ fontSize: 13, color: C.body, lineHeight: 1.6 }}>{row.answer}</div>
-          <div style={{ fontSize: 11.5, color: C.faint, marginTop: 8 }}>
-            {row.category?.name || "No Category"} · updated {row.updated_at?.slice(0, 10)}
-            {row.reviewer?.full_name ? ` · reviewed by ${row.reviewer.full_name}` : ""}
+      {editing ? (
+        <div>
+          <Input value={q} onChange={(e) => setQ(e.target.value)} style={{ marginBottom: 8, fontWeight: 600 }} />
+          <textarea value={a} onChange={(e) => setA(e.target.value)} style={{ width: "100%", minHeight: 110, fontSize: 13.5, lineHeight: 1.7, padding: "10px 12px", borderRadius: 9, border: `1px solid ${C.blueSoft}`, boxSizing: "border-box", fontFamily: "inherit", color: C.body }} />
+          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+            <Button variant="primary" onClick={save} style={{ padding: "6px 14px" }}>Save</Button>
+            <Button onClick={() => { setQ(row.question); setA(row.answer || ""); setEditing(false); }} style={{ padding: "6px 14px" }}>Cancel</Button>
           </div>
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-end" }}>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, color: C.muted, whiteSpace: "nowrap" }}>
-            <StatusDot color={STATUS_DOT[row.status]} /> {STATUS_LABEL[row.status]}
-          </span>
-          <Select value={row.status} onChange={(e) => setStatus(e.target.value)} style={{ fontSize: 11.5, padding: "5px 8px", width: "auto" }}>
-            <option value="never_reviewed">Never reviewed</option>
-            <option value="assigned">Assigned</option>
-            <option value="unassigned">Unassigned</option>
-            <option value="approved_with_edits">Approved with edits</option>
-            <option value="approved_without_edits">Approved without edits</option>
-          </Select>
+      ) : (
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 14, alignItems: "flex-start" }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: C.ink, marginBottom: 3 }}>{row.question}</div>
+            <div style={{ fontSize: 13, color: C.body, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{row.answer}</div>
+            <div style={{ fontSize: 11.5, color: C.faint, marginTop: 8 }}>
+              {row.category?.name || "No Category"} · updated {row.updated_at?.slice(0, 10)}{row.reviewer?.full_name ? ` · reviewed by ${row.reviewer.full_name}` : ""}
+            </div>
+            <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
+              <button onClick={() => setEditing(true)} style={iconBtn}>Edit</button>
+              <button onClick={remove} style={{ ...iconBtn, color: C.red, borderColor: C.redSoft }}>Delete</button>
+            </div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-end" }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, color: C.muted, whiteSpace: "nowrap" }}>
+              <StatusDot color={STATUS_DOT[row.status]} /> {STATUS_LABEL[row.status]}
+            </span>
+            <Select value={row.status} onChange={(e) => setStatus(e.target.value)} style={{ fontSize: 11.5, padding: "5px 8px", width: "auto" }}>
+              <option value="never_reviewed">Never reviewed</option>
+              <option value="assigned">Assigned</option>
+              <option value="unassigned">Unassigned</option>
+              <option value="approved_with_edits">Approved with edits</option>
+              <option value="approved_without_edits">Approved without edits</option>
+            </Select>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

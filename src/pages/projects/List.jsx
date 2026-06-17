@@ -2,10 +2,10 @@ import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { C } from "../../lib/theme.js";
 import { useSession } from "../../auth/SessionProvider.jsx";
-import { listProjects, createProject, getProjectEntries } from "../../lib/db.js";
+import { listProjects, createProject, getProjectEntries, deleteProject, updateProject, listProspects } from "../../lib/db.js";
 import { PageHeader, Button, Spinner, Empty, Modal, Field, Input, Select } from "../../components/ui.jsx";
 
-const PROSPECTS = ["Cvent", "Govini", "AdaIQ", "Energy Toolbase", "Other"];
+const DEFAULT_PROSPECTS = ["Cvent", "Govini", "AdaIQ", "Energy Toolbase", "Other"];
 const STATUS_LABEL = { draft: "Draft", in_review: "In review", legal_flagged: "Legal flagged", approved: "Approved", sent: "Sent" };
 
 export default function List() {
@@ -15,29 +15,36 @@ export default function List() {
   const [rows, setRows] = useState(null);
   const [err, setErr] = useState(null);
   const [adding, setAdding] = useState(params.get("new") === "1");
+  const [editingProject, setEditingProject] = useState(null);
+  const [prospects, setProspects] = useState(DEFAULT_PROSPECTS);
   const [filters, setFilters] = useState({ search: "", status: "all", owner: "all", involvement: "participating", type: "all" });
 
   function load() { listProjects().then(setRows).catch((e) => setErr(e.message)); }
-  useEffect(load, []);
+  useEffect(() => {
+    load();
+    listProspects().then((rs) => rs.length && setProspects([...rs.map((r) => r.name), "Other"])).catch(() => {});
+  }, []);
+
+  async function remove(p) {
+    if (!confirm(`Delete project "${p.name}" and all its questions? This can't be undone.`)) return;
+    try { await deleteProject(p.id); load(); } catch (e) { setErr(e.message); }
+  }
+  async function saveEdit(d) {
+    try { await updateProject(d.id, { name: d.name, prospect: d.prospect, status: d.status }); setEditingProject(null); load(); } catch (e) { setErr(e.message); }
+  }
 
   const owners = [...new Set((rows || []).map((p) => p.owner?.full_name).filter(Boolean))];
   const visible = (rows || []).filter((p) => {
     if (filters.status !== "all" && p.status !== filters.status) return false;
     if (filters.owner !== "all" && p.owner?.full_name !== filters.owner) return false;
-    if (filters.search) {
-      const s = filters.search.toLowerCase();
-      if (!(`${p.name} ${p.prospect || ""}`.toLowerCase().includes(s))) return false;
-    }
+    if (filters.search && !(`${p.name} ${p.prospect || ""}`.toLowerCase().includes(filters.search.toLowerCase()))) return false;
     return true;
   });
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "230px 1fr", gap: 24 }}>
-      {/* Left filter rail */}
       <aside>
-        <Rail label="Search Projects">
-          <Input value={filters.search} onChange={(e) => setFilters({ ...filters, search: e.target.value })} placeholder="Search by name, client…" />
-        </Rail>
+        <Rail label="Search Projects"><Input value={filters.search} onChange={(e) => setFilters({ ...filters, search: e.target.value })} placeholder="Search by name, client…" /></Rail>
         <Rail label="Project Owner">
           <Select value={filters.owner} onChange={(e) => setFilters({ ...filters, owner: e.target.value })}>
             <option value="all">All team members</option>
@@ -57,13 +64,10 @@ export default function List() {
           </Select>
         </Rail>
         <Rail label="Project Type">
-          <Select value={filters.type} onChange={(e) => setFilters({ ...filters, type: e.target.value })}>
-            <option value="all">All</option>
-          </Select>
+          <Select value={filters.type} onChange={(e) => setFilters({ ...filters, type: e.target.value })}><option value="all">All</option></Select>
         </Rail>
       </aside>
 
-      {/* Main */}
       <div>
         <PageHeader title="Projects" subtitle="Each project is a questionnaire or RFP you're answering." actions={<Button variant="primary" onClick={() => setAdding(true)}>+ Create a Project</Button>} />
         {err && <div style={{ color: C.red, fontSize: 13, marginBottom: 12 }}>{err}</div>}
@@ -73,15 +77,16 @@ export default function List() {
         ) : (
           <div style={{ background: "#fff", border: `1px solid ${C.cardLine}`, borderRadius: 14, overflow: "hidden" }}>
             {visible.map((p) => (
-              <div key={p.id} onClick={() => nav(`/projects/${p.id}`)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 18px", borderBottom: `1px solid ${C.line}`, cursor: "pointer" }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = C.panel)} onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>
-                <div>
+              <div key={p.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 18px", borderBottom: `1px solid ${C.line}` }}>
+                <div onClick={() => nav(`/projects/${p.id}`)} style={{ cursor: "pointer", flex: 1 }}>
                   <div style={{ fontSize: 14, fontWeight: 600, color: C.ink }}>{p.name}</div>
                   <div style={{ fontSize: 12, color: C.muted }}>{p.prospect || "—"} · {p.entries?.[0]?.count ?? 0} questions{p.owner?.full_name ? ` · ${p.owner.full_name}` : ""} · {p.created_at?.slice(0, 10)}</div>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   {p.is_template && <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 6, background: "#EDE9FE", color: "#5B21B6" }}>Template</span>}
                   <StatusTag status={p.status} />
+                  <button onClick={() => setEditingProject(p)} style={iconBtn}>Edit</button>
+                  <button onClick={() => remove(p)} style={{ ...iconBtn, color: C.red, borderColor: C.redSoft }}>Delete</button>
                 </div>
               </div>
             ))}
@@ -92,15 +97,19 @@ export default function List() {
       {adding && (
         <CreateProjectModal
           user={user}
+          prospects={prospects}
+          templates={(rows || []).filter((p) => p.is_template)}
           onClose={() => { setAdding(false); params.delete("new"); setParams(params); }}
           onCreated={(p, prefillQuestions) => nav(`/projects/${p.id}`, { state: { prefillQuestions } })}
           onError={setErr}
-          templates={(rows || []).filter((p) => p.is_template)}
         />
       )}
+      {editingProject && <EditProjectModal project={editingProject} prospects={prospects} onClose={() => setEditingProject(null)} onSave={saveEdit} />}
     </div>
   );
 }
+
+const iconBtn = { fontSize: 11.5, padding: "4px 10px", borderRadius: 7, border: `1px solid ${C.line}`, background: "#fff", color: C.body, cursor: "pointer", fontFamily: "inherit" };
 
 function Rail({ label, children }) {
   return (
@@ -111,9 +120,31 @@ function Rail({ label, children }) {
   );
 }
 
-// The three Loopio creation paths: Source Document (functional), Portal (scaffold), Templates.
-function CreateProjectModal({ user, onClose, onCreated, onError, templates }) {
-  const [draft, setDraft] = useState({ name: "", prospect: "Govini" });
+function EditProjectModal({ project, prospects, onClose, onSave }) {
+  const [d, setD] = useState({ id: project.id, name: project.name, prospect: project.prospect || "", status: project.status });
+  return (
+    <Modal title="Edit Project" onClose={onClose}>
+      <Field label="Project name"><Input value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} autoFocus /></Field>
+      <Field label="Prospect / client">
+        <Select value={d.prospect} onChange={(e) => setD({ ...d, prospect: e.target.value })}>
+          {[d.prospect, ...prospects.filter((p) => p !== d.prospect)].filter(Boolean).map((p) => <option key={p}>{p}</option>)}
+        </Select>
+      </Field>
+      <Field label="Status">
+        <Select value={d.status} onChange={(e) => setD({ ...d, status: e.target.value })}>
+          {Object.entries(STATUS_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+        </Select>
+      </Field>
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button variant="primary" disabled={!d.name.trim()} onClick={() => onSave(d)}>Save</Button>
+      </div>
+    </Modal>
+  );
+}
+
+function CreateProjectModal({ user, prospects, onClose, onCreated, onError, templates }) {
+  const [draft, setDraft] = useState({ name: "", prospect: prospects[0] || "Govini" });
   const [templateId, setTemplateId] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -121,14 +152,7 @@ function CreateProjectModal({ user, onClose, onCreated, onError, templates }) {
     if (!draft.name.trim()) return;
     setBusy(true);
     try {
-      const p = await createProject({
-        name: draft.name.trim(),
-        prospect: draft.prospect,
-        owner_id: user?.id || null,
-        status: "draft",
-      });
-      // Using a template copies its questions into the new project's draft box, ready
-      // to re-draft against this prospect. (Prior answers are intentionally not carried over.)
+      const p = await createProject({ name: draft.name.trim(), prospect: draft.prospect, owner_id: user?.id || null, status: "draft" });
       let prefillQuestions = [];
       if (fromTemplateId) {
         const src = await getProjectEntries(fromTemplateId);
@@ -146,12 +170,11 @@ function CreateProjectModal({ user, onClose, onCreated, onError, templates }) {
       <Field label="Project name"><Input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} autoFocus placeholder="e.g. Govini RFI — Jun 2026" /></Field>
       <Field label="Prospect / client">
         <Select value={draft.prospect} onChange={(e) => setDraft({ ...draft, prospect: e.target.value })}>
-          {PROSPECTS.map((p) => <option key={p}>{p}</option>)}
+          {prospects.map((p) => <option key={p}>{p}</option>)}
         </Select>
       </Field>
 
       <div style={{ borderTop: `1px solid ${C.line}`, marginTop: 4 }}>
-        {/* Source Document */}
         <Row>
           <div>
             <div style={sectionLabel}>Respond to a Source Document</div>
@@ -159,8 +182,6 @@ function CreateProjectModal({ user, onClose, onCreated, onError, templates }) {
           </div>
           <Button variant="primary" disabled={!draft.name.trim() || busy} onClick={() => create(null)} style={{ opacity: draft.name.trim() ? 1 : 0.5, whiteSpace: "nowrap" }}>Create Project</Button>
         </Row>
-
-        {/* Templates */}
         <Row last>
           <div style={{ flex: 1 }}>
             <div style={sectionLabel}>Available Templates</div>
@@ -178,11 +199,7 @@ function CreateProjectModal({ user, onClose, onCreated, onError, templates }) {
 }
 
 function Row({ children, last }) {
-  return (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, padding: "16px 0", borderBottom: last ? "none" : `1px solid ${C.line}` }}>
-      {children}
-    </div>
-  );
+  return <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, padding: "16px 0", borderBottom: last ? "none" : `1px solid ${C.line}` }}>{children}</div>;
 }
 
 function StatusTag({ status }) {

@@ -84,8 +84,10 @@ export default function TopNav() {
             </button>
             {open && (
               <div style={{ position: "absolute", top: "100%", right: 0, marginTop: 6, background: "#fff", borderRadius: 10, boxShadow: "0 12px 30px rgba(16,24,40,0.18)", border: `1px solid ${C.line}`, minWidth: 210, padding: 6, zIndex: 40 }}>
-                <div style={{ padding: "8px 12px", fontSize: 12, color: C.muted, borderBottom: `1px solid ${C.line}`, marginBottom: 4 }}>{u.email}</div>
-                <button onClick={async () => { await supabase.auth.signOut(); nav("/login"); }} style={{ width: "100%", textAlign: "left", padding: "8px 12px", borderRadius: 7, fontSize: 13, color: C.body, background: "transparent", border: "none", cursor: "pointer" }}>Sign out</button>
+                <div style={{ padding: "8px 12px", fontSize: 12, color: C.muted, borderBottom: `1px solid ${C.line}`, marginBottom: 4 }}>{u.email || u.name}</div>
+                <Link to="/settings" onClick={() => setOpen(false)} style={{ display: "block", padding: "8px 12px", borderRadius: 7, fontSize: 13, color: C.body, textDecoration: "none" }}>Settings</Link>
+                <Link to="/setup" onClick={() => setOpen(false)} style={{ display: "block", padding: "8px 12px", borderRadius: 7, fontSize: 13, color: C.body, textDecoration: "none" }}>Setup wizard</Link>
+                <button onClick={async () => { await supabase.auth.signOut(); nav("/login"); }} style={{ width: "100%", textAlign: "left", padding: "8px 12px", borderRadius: 7, fontSize: 13, color: C.body, background: "transparent", border: "none", cursor: "pointer", borderTop: `1px solid ${C.line}`, marginTop: 4 }}>Sign out</button>
               </div>
             )}
           </div>
