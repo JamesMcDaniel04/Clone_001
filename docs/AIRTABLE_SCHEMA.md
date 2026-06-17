@@ -1,4 +1,4 @@
-# Airtable Schema — Clone
+# Airtable Schema — MAX: Machine Answer Expert
 
 > ⚠️ **Superseded.** The platform now uses **Supabase (Postgres)** as its system of record — see
 > [`DATA_MODEL.md`](DATA_MODEL.md) and `supabase/migrations/0001_init.sql`. This Airtable schema is

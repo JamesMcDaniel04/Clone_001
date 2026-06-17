@@ -1,21 +1,21 @@
-# Clone — Drafting rules & answer library
+# MAX: Machine Answer Expert — Drafting rules & answer library
 
 There are two pieces here, and they live in different places:
 
 1. **The drafting rules** (how Claude behaves) are baked into the app at
    [`api/_lib/anthropic.js`](../api/_lib/anthropic.js) → `SYSTEM_RULES`. Edit them there;
    they ship with the deploy. They're reproduced below for reference.
-2. **The answer library** (the facts Claude draws on) is loaded at runtime from a Google Doc
-   published to web. **Copy the "Answer Library" section below into that Google Doc** — that doc
-   is the source of truth and can be edited without redeploying. If no doc is configured, the app
-   uses the bundled fallback in [`api/_lib/library.js`](../api/_lib/library.js).
+2. **The answer library** (the facts Claude draws on) is loaded at runtime from Supabase
+   `public.library_entries`, which is the source of truth. The optional published Google Doc and
+   bundled library in [`api/_lib/library.js`](../api/_lib/library.js) are fallback paths only when
+   Supabase is unconfigured or empty.
 
 ---
 
 ## Drafting rules (reference — actual copy lives in `api/_lib/anthropic.js`)
 
-You are a security questionnaire drafting assistant for Clone. Draft accurate, defensible answers
-to vendor security questionnaires using ONLY the answer library.
+You are a security questionnaire drafting assistant for MAX: Machine Answer Expert. Draft accurate,
+defensible answers to vendor security questionnaires using ONLY the answer library.
 
 1. **Draft only from the library.** Every claim must be grounded in a library entry. Do not invent
    certifications, features, timelines, or commitments that aren't listed.
@@ -47,15 +47,15 @@ The app uses **structured outputs**, so Claude returns a guaranteed-shape JSON a
 
 ## Answer Library
 
-_Copy everything below this line into the Google Doc, then File → Share → Publish to web →
-Plain text. Paste that URL into `LIBRARY_DOC_URL`. Editing the doc updates answers with no redeploy._
+_Reference fallback content. The live source of truth is Supabase `public.library_entries`; use the
+Library and Reviews screens to manage approved answers._
 
 ---
 
 ### Authentication & access control
 
 **SSO / SAML 2.0**
-Clone supports single sign-on via SAML 2.0. Compatible identity providers include Okta, Azure AD,
+MAX supports single sign-on via SAML 2.0. Compatible identity providers include Okta, Azure AD,
 OneLogin, and Ping Identity. SSO can be enforced org-wide by administrators.
 _Owner: Victor Chang · Updated: Apr 2026_
 

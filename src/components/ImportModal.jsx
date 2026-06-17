@@ -84,7 +84,7 @@ export default function ImportModal({ onClose, onImport }) {
       ) : (
         <div>
           <div style={{ fontSize: 13, color: C.body, lineHeight: 1.6, marginBottom: 14 }}>
-            Upload a questionnaire as <strong>.docx</strong>, <strong>.pdf</strong>, or <strong>.txt</strong> — Clone extracts the questions (one per line).
+            Upload a questionnaire as <strong>.docx</strong>, <strong>.pdf</strong>, or <strong>.txt</strong> — MAX extracts the questions (one per line).
           </div>
           <FilePick label="Choose a document" accept=".docx,.pdf,.txt,.md" onChange={onDoc} name={fileName} />
         </div>

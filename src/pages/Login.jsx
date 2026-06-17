@@ -15,9 +15,9 @@ export default function Login() {
           <div style={{ width: 32, height: 32, borderRadius: 8, background: C.navy, display: "flex", alignItems: "center", justifyContent: "center" }}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
           </div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: C.ink }}>clone</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: C.ink }}>MAX</div>
         </div>
-        <div style={{ fontSize: 20, fontWeight: 650, color: C.ink, marginBottom: 6 }}>Security questionnaire platform</div>
+        <div style={{ fontSize: 20, fontWeight: 650, color: C.ink, marginBottom: 6 }}>Machine Answer Expert</div>
         <div style={{ fontSize: 13.5, color: C.muted, lineHeight: 1.6, marginBottom: 24 }}>
           This deployment uses a shared workspace. Everyone with access to the app sees the same projects, reviews, and answer library.
         </div>

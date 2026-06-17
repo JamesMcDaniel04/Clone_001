@@ -18,7 +18,7 @@ export default function RequireAuth({ children }) {
       <Centered>
         <div style={{ fontSize: 18, fontWeight: 650, color: C.ink, marginBottom: 10 }}>Connect Supabase to continue</div>
         <div style={{ fontSize: 14, color: C.body, lineHeight: 1.6 }}>
-          This is the Clone platform. It needs a Supabase project for its database and sign-in. Add{" "}
+          This is MAX: Machine Answer Expert. It needs a Supabase project for its database and sign-in. Add{" "}
           <code style={{ background: C.panel, padding: "1px 5px", borderRadius: 5 }}>VITE_SUPABASE_URL</code> and{" "}
           <code style={{ background: C.panel, padding: "1px 5px", borderRadius: 5 }}>VITE_SUPABASE_ANON_KEY</code>{" "}
           or <code style={{ background: C.panel, padding: "1px 5px", borderRadius: 5 }}>VITE_SUPABASE_PUBLISHABLE_KEY</code> to{" "}

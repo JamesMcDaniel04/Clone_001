@@ -1,4 +1,4 @@
-# Clone — Setup Guide
+# MAX: Machine Answer Expert — Setup Guide
 
 From an empty machine to a live shared workspace. The app needs three services: **Supabase**
 (database + anonymous sessions), **Anthropic** (drafting), and **Vercel** (hosting).

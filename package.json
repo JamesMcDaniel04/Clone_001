@@ -1,9 +1,9 @@
 {
-  "name": "clone-security-questionnaire-tool",
+  "name": "max-machine-answer-expert",
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Clone — paste an infosec questionnaire, draft grounded answers with Claude, review, and export.",
+  "description": "MAX: Machine Answer Expert — paste an infosec questionnaire, draft grounded answers with Claude, review, and export.",
   "engines": {
     "node": ">=18"
   },

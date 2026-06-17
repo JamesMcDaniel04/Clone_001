@@ -1,4 +1,4 @@
-# Clone — Data Model
+# MAX: Machine Answer Expert — Data Model
 
 Postgres on Supabase. Full DDL is in [`supabase/migrations/0001_init.sql`](../supabase/migrations/0001_init.sql).
 Every content table has **Row-Level Security** enabled with a single policy: any authenticated
@@ -45,9 +45,38 @@ The Reviews queue isn't its own table — it's a filtered query over `library_en
 (`src/lib/db.js` → `listReviews`) by category, status, and keyword. Approving an entry in Reviews
 sets `status` + `reviewed_at`.
 
+## Source of truth
+
+Supabase Postgres is the source of truth. The canonical reusable answer base is
+`public.library_entries`; it stores the approved answer text, category, tags, review status,
+reviewer fields, and timestamps. `public.project_entries` stores answers inside a specific
+questionnaire/project. Those project answers become sendable only when `status = 'approved'`; they
+do not become reusable source material until a reviewer promotes or updates a `library_entries` row.
+
+The frontend has no separate answer store. It reads and writes Supabase through
+[`src/lib/db.js`](../src/lib/db.js). The primary screens are:
+
+- Library Management/Search/Category: edits `library_entries` and `categories`.
+- Reviews → From Library: reviews existing `library_entries`.
+- Reviews → From Projects: curates `project_entries` into `library_entries`.
+- Project workspace: stores draft/edited/approved questionnaire answers in `project_entries`.
+
+## Governance
+
+Governance is currently enforced by workflow and review metadata rather than strict role policies.
+The app tracks `library_entries.status`, `reviewed_by`, `reviewed_at`, category reviewers,
+`next_review_cycle`, project-answer status, and legal/engineering/no-match flags. The AI drafts are
+inputs to review; they are not automatically authoritative. A human must approve a project answer
+for export, and a human must add or update the library for that answer to become reusable.
+
+RLS is enabled on every content table, but the current policy is intentionally broad for a shared
+internal workspace: any authenticated Supabase session may read/write. Because anonymous sessions
+are enabled, deploy access should be protected at the hosting layer unless/until `profiles.role` is
+used for stricter Supabase policies.
+
 ## How drafting reads the library
 
 `/api/draft` (server-side, service-role key) calls `getDbLibrary()`
 ([`api/_lib/supabaseAdmin.js`](../api/_lib/supabaseAdmin.js)), which formats all answered
 `library_entries` grouped by category into the prompt context. If Supabase is unconfigured/empty it
-falls back to the bundled library in `api/_lib/library.js`.
+falls back to the optional published document or bundled library in `api/_lib/library.js`.

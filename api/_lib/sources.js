@@ -36,7 +36,7 @@ async function fetchSource(url) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 7000);
   try {
-    const res = await fetch(url, { signal: controller.signal, headers: { "user-agent": "CloneSourceFetcher/1.0" } });
+    const res = await fetch(url, { signal: controller.signal, headers: { "user-agent": "MAXSourceFetcher/1.0" } });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const text = htmlToText(await res.text()).slice(0, 16000);
     if (!text) return null;

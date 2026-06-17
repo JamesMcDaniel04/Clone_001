@@ -1,4 +1,4 @@
--- Clone platform — initial schema + Row-Level Security.
+-- MAX: Machine Answer Expert — initial schema + Row-Level Security.
 -- Run in the Supabase SQL editor (or `supabase db push`). Safe to re-run.
 
 create extension if not exists pgcrypto;

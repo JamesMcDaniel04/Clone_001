@@ -56,7 +56,7 @@ export default function TopNav() {
           <div style={{ width: 24, height: 24, borderRadius: 6, background: "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.navy} strokeWidth="2.4"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
           </div>
-          <span style={{ color: "#fff", fontWeight: 700, fontSize: 15, letterSpacing: 0.2 }}>clone</span>
+          <span style={{ color: "#fff", fontWeight: 700, fontSize: 15, letterSpacing: 0.2 }}>MAX</span>
         </Link>
 
         <Link to="/" style={{ color: C.navyText, display: "flex", alignItems: "center" }} title="Home"><IconHome /></Link>

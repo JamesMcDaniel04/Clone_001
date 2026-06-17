@@ -1,4 +1,4 @@
-# Clone — security questionnaire platform
+# MAX: Machine Answer Expert
 
 A Loopio-style platform for infosec/RFP questionnaires. Maintain a reviewed answer **Library**,
 answer vendor questionnaires as **Projects** with Claude drafting grounded on that library, work a
@@ -37,6 +37,26 @@ npm i -g vercel && vercel dev   # UI + API on http://localhost:3000
 Full walkthrough (Supabase project, anonymous sessions, deploy, library import) →
 [`docs/SETUP.md`](docs/SETUP.md). Data model → [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md).
 
+## Source of truth and governance
+
+**Source of truth:** Supabase Postgres is the system of record. The reusable approved-answer
+library lives in `public.library_entries`; project/questionnaire answers live in
+`public.project_entries`; projects and categories provide workflow context.
+
+**Where approved answers live:** reusable approved answers are stored in `library_entries.answer`
+with review status and review metadata. Per-questionnaire approved answers are stored in
+`project_entries` with `status = 'approved'`; exports only include those approved project entries.
+The frontend reads and writes those tables through `src/lib/db.js`; the backend drafting API formats
+the same Supabase library through `api/_lib/supabaseAdmin.js` when the client has not already sent
+the authenticated library context.
+
+**Governance:** governance is workflow-level today: library entries have review statuses,
+categories can have reviewers and next review dates, project answers can be flagged for legal or
+engineering, and reviewers explicitly approve project answers or promote/update entries into the
+library. Row-Level Security is enabled, but the current shared-workspace policy lets any
+authenticated/anonymous session read and write, so production access should be gated externally
+(for example, Vercel Deployment Protection) or hardened later with role-based Supabase policies.
+
 ## What's built vs. roadmap
 
 **Built:** Shared anonymous access · Home · Library Management (categories, entries, search, merge
@@ -57,6 +77,3 @@ merge-variable substitution into drafts · review notifications · usage analyti
 | `api/draft.js` + `api/_lib/` | Claude drafting, grounded on Supabase |
 | `supabase/` | Schema migration + seed |
 | `docs/` | `SETUP.md`, `DATA_MODEL.md`, `AIRTABLE_SCHEMA.md` (superseded) |
-
-"Clone" is a working name — rename freely in `index.html`, `src/components/TopNav.jsx`, and
-`src/pages/Login.jsx`.

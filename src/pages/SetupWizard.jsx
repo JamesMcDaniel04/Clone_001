@@ -50,7 +50,7 @@ export default function SetupWizard() {
         {err && <div style={{ color: C.red, fontSize: 13, marginBottom: 12 }}>{err}</div>}
 
         {step === 0 && (
-          <Body title="Welcome to Clone 👋" text="A quick tour to make sure everything's ready: your answer library, prospects, merge variables, and your first project. Takes about a minute.">
+          <Body title="Welcome to MAX" text="A quick tour to make sure everything's ready: your answer library, prospects, merge variables, and your first project. Takes about a minute.">
             <Button variant="primary" onClick={() => setStep(1)}>Start</Button>
           </Body>
         )}

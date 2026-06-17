@@ -105,5 +105,5 @@ export async function downloadTemplate(withSamples) {
   const ws = XLSX.utils.aoa_to_sheet(aoa);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Questions");
-  XLSX.writeFile(wb, withSamples ? "clone-import-sample.xlsx" : "clone-import-template.xlsx");
+  XLSX.writeFile(wb, withSamples ? "max-import-sample.xlsx" : "max-import-template.xlsx");
 }
