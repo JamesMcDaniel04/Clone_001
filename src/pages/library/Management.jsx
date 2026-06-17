@@ -67,7 +67,7 @@ export default function Management() {
 const iconBtn = { fontSize: 11.5, padding: "4px 10px", borderRadius: 7, border: `1px solid ${C.line}`, background: "#fff", color: C.body, cursor: "pointer", fontFamily: "inherit" };
 
 function EditModal({ initial, profiles, onClose, onSave }) {
-  const [d, setD] = useState({ next_review_cycle: "", reviewer_id: "", ...initial, reviewer_id: initial.reviewer_id || "", next_review_cycle: initial.next_review_cycle || "" });
+  const [d, setD] = useState({ ...initial, reviewer_id: initial.reviewer_id || "", next_review_cycle: initial.next_review_cycle || "" });
   return (
     <Modal title={initial.id ? "Edit Category" : "Add Category"} onClose={onClose}>
       <Field label="Category name"><Input value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} autoFocus placeholder="e.g. InfoSec" /></Field>

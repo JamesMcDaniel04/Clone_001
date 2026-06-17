@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { useParams, useLocation } from "react-router-dom";
 import { C } from "../../lib/theme.js";
-import { getProject, getProjectEntries, insertProjectEntries, updateProjectEntry, createEntry, listMergeVariables, updateProject, getLibraryText } from "../../lib/db.js";
-import { PageHeader, Button, Spinner } from "../../components/ui.jsx";
+import { getProject, getProjectEntries, insertProjectEntries, updateProjectEntry, deleteProjectEntry, createEntry, listMergeVariables, updateProject, getLibraryText } from "../../lib/db.js";
+import { PageHeader, Button, Spinner, Modal, Field, Input } from "../../components/ui.jsx";
 import Stepper from "../../components/Stepper.jsx";
 import QuestionCard from "../../components/QuestionCard.jsx";
 import ImportModal from "../../components/ImportModal.jsx";
@@ -146,6 +146,30 @@ export default function Project() {
     } catch (e) { setErr(e.message); }
   }
 
+  async function updateTemplateEntry(entry, question) {
+    try {
+      const updated = await updateProjectEntry(entry.id, { question });
+      setEntries((prev) => (prev || []).map((e) => (e.id === entry.id ? updated : e)));
+    } catch (e) { setErr(e.message); }
+  }
+
+  async function removeProjectEntry(idx) {
+    const entry = entries[idx];
+    if (!entry?.id || !confirm("Delete this project entry?")) return;
+    try {
+      await deleteProjectEntry(entry.id);
+      setEntries((prev) => prev.filter((_, i) => i !== idx));
+    } catch (e) { setErr(e.message); }
+  }
+
+  async function removeTemplateEntry(entry) {
+    if (!entry?.id || !confirm("Delete this template entry?")) return;
+    try {
+      await deleteProjectEntry(entry.id);
+      setEntries((prev) => prev.filter((e) => e.id !== entry.id));
+    } catch (e) { setErr(e.message); }
+  }
+
   function exportTxt() {
     const approved = (entries || []).filter((q) => q.status === "approved");
     const lines = approved.map((q, i) => `Q${i + 1}: ${q.question}\n\nA: ${resolveMV(q.edited_answer)}\n\n${q.flag ? "⚠ FLAGGED: " + (q.flag_reason || "") + "\n" : ""}---`);
@@ -178,6 +202,8 @@ export default function Project() {
         templateEntryOpen={templateEntryOpen}
         onCloseEntry={() => setTemplateEntryOpen(false)}
         onCreateEntry={addTemplateEntry}
+        onUpdateEntry={updateTemplateEntry}
+        onDeleteEntry={removeTemplateEntry}
       />
     );
   }
@@ -227,7 +253,7 @@ export default function Project() {
             <Stat label="Flagged" value={flagged} tone="tan" />
           </div>
           {entries.map((q, i) => (
-            <QuestionCard key={q.id || i} q={q} idx={i} prospect={project.prospect} libraryLabel="Full library" resolve={resolveMV} onStatusChange={handleStatusChange} onAnswerEdit={handleAnswerEdit} onPromote={handlePromote} />
+            <QuestionCard key={q.id || i} q={q} idx={i} prospect={project.prospect} libraryLabel="Full library" resolve={resolveMV} onStatusChange={handleStatusChange} onAnswerEdit={handleAnswerEdit} onPromote={handlePromote} onDelete={removeProjectEntry} />
           ))}
         </div>
       )}
@@ -259,3 +285,127 @@ function Stat({ label, value, tone }) {
     </div>
   );
 }
+
+function TemplateWorkspace({ project, entries, err, exportMsg, onDownload, onPublish, onAddEntry, templateEntryOpen, onCloseEntry, onCreateEntry, onUpdateEntry, onDeleteEntry }) {
+  const [editingEntry, setEditingEntry] = useState(null);
+  const published = project.status === "approved";
+  return (
+    <div style={{ margin: "-18px -16px -80px", minHeight: "calc(100vh - 52px)", background: C.bg }}>
+      <div style={{ height: 58, background: "#fff", borderBottom: `1px solid ${C.line}`, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 18px" }}>
+        <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: C.ink }}>{project.name}</h1>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <Button onClick={onDownload}>Download Template</Button>
+          <Button variant="primary" onClick={onPublish}>{published ? "Published Project Template" : "Publish Project Template"}</Button>
+          <button style={{ border: "none", background: "transparent", color: C.blueInk, fontSize: 20, cursor: "pointer" }}>...</button>
+        </div>
+      </div>
+
+      {!published && (
+        <div style={{
+          height: 34,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: C.blueInk,
+          fontSize: 13,
+          fontWeight: 650,
+          backgroundImage: "repeating-linear-gradient(135deg, #F9E5B2 0, #F9E5B2 4px, #FFF8E8 4px, #FFF8E8 10px)",
+          borderBottom: `1px solid ${C.tanLine}`,
+        }}>
+          This Project Template is currently in draft mode.
+        </div>
+      )}
+
+      {err && <div style={{ color: C.red, fontSize: 13, margin: 16 }}>{err}</div>}
+      {exportMsg && <div style={{ background: C.greenSoft, color: "#15803D", fontSize: 13, padding: "9px 14px", borderRadius: 9, margin: 16, border: "1px solid #BBE7CB" }}>{exportMsg}</div>}
+
+      <div style={{ display: "grid", gridTemplateColumns: "280px minmax(0, 1fr)", minHeight: published ? "calc(100vh - 110px)" : "calc(100vh - 144px)" }}>
+        <aside style={{ background: "#fff", borderRight: `1px solid ${C.line}`, padding: "14px 14px" }}>
+          <div style={{ display: "flex", gap: 12, alignItems: "center", color: C.blueInk, fontSize: 15, marginBottom: 24 }}>
+            <span style={toolIcon}>☷</span><span style={toolIcon}>□</span><span style={toolIcon}>i</span>
+            <span style={{ marginLeft: "auto", color: C.muted }}>←</span>
+          </div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: C.ink, marginBottom: 14 }}>Project Outline</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: C.body }}>
+            <span>⌄</span>
+            <div style={{ flex: 1, background: "#ECEBF4", borderRadius: 4, padding: "8px 10px", fontWeight: 700 }}>[Untitled Section]</div>
+          </div>
+        </aside>
+
+        <main style={{ padding: "18px 22px" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 54 }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <button style={filterBtn}>▽</button>
+              <Input placeholder="Search Questions & Answers" style={{ width: 300, borderRadius: 4 }} />
+            </div>
+            <button style={linkBtn}>Hide / Show All Answers</button>
+          </div>
+
+          <div style={{ maxWidth: 760 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, color: C.body, marginBottom: 28 }}>
+              <span style={{ color: C.muted }}>⌄</span>
+              <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>[Untitled Section]</h2>
+              <span style={{ marginLeft: "auto", color: C.muted }}>...</span>
+            </div>
+            <TemplateAction onClick={() => {}}>+ Add Instructions to <strong>[Untitled Section]</strong></TemplateAction>
+            <TemplateAction onClick={onAddEntry}>+ Add Entry to <strong>[Untitled Section]</strong></TemplateAction>
+            <TemplateAction onClick={() => {}}>+ Add Subsection to <strong>[Untitled Section]</strong></TemplateAction>
+            <button onClick={() => {}} style={{ ...linkBtn, marginTop: 16 }}>+ Add Section</button>
+
+            {entries.length > 0 && (
+              <div style={{ marginTop: 28, borderTop: `1px solid ${C.line}`, paddingTop: 18 }}>
+                {entries.map((entry, i) => (
+                  <div key={entry.id || i} style={{ display: "flex", alignItems: "center", gap: 16, padding: "10px 0", borderBottom: `1px solid ${C.line}` }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13, color: C.muted, marginBottom: 4 }}>Entry {i + 1}</div>
+                      <div style={{ fontSize: 14, color: C.ink, fontWeight: 600 }}>{entry.question}</div>
+                    </div>
+                    <button onClick={() => setEditingEntry(entry)} style={smallBtn}>Edit</button>
+                    <button onClick={() => onDeleteEntry(entry)} style={{ ...smallBtn, color: C.red, borderColor: C.redSoft }}>Delete</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </main>
+      </div>
+
+      {templateEntryOpen && <TemplateEntryModal onClose={onCloseEntry} onCreate={onCreateEntry} />}
+      {editingEntry && (
+        <TemplateEntryModal
+          initial={editingEntry}
+          onClose={() => setEditingEntry(null)}
+          onCreate={(question) => { onUpdateEntry(editingEntry, question); setEditingEntry(null); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function TemplateAction({ onClick, children }) {
+  return (
+    <button onClick={onClick} style={{ display: "block", border: "none", background: "transparent", color: C.blueInk, cursor: "pointer", fontSize: 13, fontWeight: 600, fontFamily: "inherit", padding: "10px 0 10px 28px" }}>
+      {children}
+    </button>
+  );
+}
+
+function TemplateEntryModal({ initial, onClose, onCreate }) {
+  const [question, setQuestion] = useState(initial?.question || "");
+  return (
+    <Modal title={initial ? "Edit Template Entry" : "Add Template Entry"} onClose={onClose}>
+      <Field label="Question / prompt">
+        <Input value={question} onChange={(e) => setQuestion(e.target.value)} autoFocus placeholder="e.g. Do you support SSO via SAML 2.0?" />
+      </Field>
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button variant="primary" disabled={!question.trim()} onClick={() => onCreate(question.trim())}>{initial ? "Save" : "Add Entry"}</Button>
+      </div>
+    </Modal>
+  );
+}
+
+const toolIcon = { display: "inline-flex", alignItems: "center", justifyContent: "center", width: 20, height: 20 };
+const filterBtn = { width: 30, height: 30, border: `1px solid ${C.line}`, background: "#fff", color: C.blueInk, borderRadius: 3, cursor: "pointer" };
+const linkBtn = { border: "none", background: "transparent", color: C.blueInk, cursor: "pointer", fontSize: 13, fontWeight: 650, fontFamily: "inherit" };
+const smallBtn = { fontSize: 12, padding: "5px 12px", borderRadius: 8, border: `1px solid ${C.line}`, cursor: "pointer", background: "#fff", color: C.body, fontFamily: "inherit" };

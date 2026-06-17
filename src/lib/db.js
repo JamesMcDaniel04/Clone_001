@@ -63,6 +63,9 @@ export async function listTags() {
 export async function createTag(name) {
   return unwrap(await supabase.from("tags").insert({ name }).select().single());
 }
+export async function updateTag(id, fields) {
+  return unwrap(await supabase.from("tags").update(fields).eq("id", id).select().single());
+}
 
 // ── Merge variables ─────────────────────────────────────────────────────────
 export async function listMergeVariables() {
@@ -104,6 +107,9 @@ export async function insertProjectEntries(rows) {
 }
 export async function updateProjectEntry(id, fields) {
   return unwrap(await supabase.from("project_entries").update(fields).eq("id", id).select().single());
+}
+export async function deleteProjectEntry(id) {
+  unwrap(await supabase.from("project_entries").delete().eq("id", id));
 }
 
 // ── Reviews (filtered query over library entries) ───────────────────────────
@@ -158,6 +164,7 @@ export async function deleteTag(id) { unwrap(await supabase.from("tags").delete(
 // ── Prospects (managed in Settings) ──────────────────────────────────────────
 export async function listProspects() { return unwrap(await supabase.from("prospects").select("*").order("name")); }
 export async function createProspect(name) { return unwrap(await supabase.from("prospects").insert({ name }).select().single()); }
+export async function updateProspect(id, fields) { return unwrap(await supabase.from("prospects").update(fields).eq("id", id).select().single()); }
 export async function deleteProspect(id) { unwrap(await supabase.from("prospects").delete().eq("id", id)); }
 
 // ── Profiles (team members, for Settings/assignees) ──────────────────────────

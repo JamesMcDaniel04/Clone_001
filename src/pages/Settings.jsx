@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { C } from "../lib/theme.js";
-import { listProspects, createProspect, deleteProspect } from "../lib/db.js";
-import { PageHeader, Card, Button, Spinner, Input } from "../components/ui.jsx";
+import { listProspects, createProspect, updateProspect, deleteProspect } from "../lib/db.js";
+import { PageHeader, Card, Button, Spinner, Input, Modal, Field } from "../components/ui.jsx";
 
 export default function Settings() {
   const [prospects, setProspects] = useState(null);
   const [name, setName] = useState("");
+  const [editingProspect, setEditingProspect] = useState(null);
   const [pErr, setPErr] = useState(null);
 
   function loadProspects() {
@@ -20,6 +21,10 @@ export default function Settings() {
   }
   async function remove(p) {
     try { await deleteProspect(p.id); loadProspects(); } catch (e) { setPErr(e.message); }
+  }
+  async function saveProspect(p) {
+    if (!p.name.trim()) return;
+    try { await updateProspect(p.id, { name: p.name.trim() }); setEditingProspect(null); loadProspects(); } catch (e) { setPErr(e.message); }
   }
 
   return (
@@ -51,6 +56,7 @@ export default function Settings() {
               {prospects.map((p) => (
                 <span key={p.id} style={{ display: "inline-flex", alignItems: "center", gap: 8, background: C.panel, border: `1px solid ${C.line}`, borderRadius: 8, padding: "5px 8px 5px 12px", fontSize: 13 }}>
                   {p.name}
+                  <button onClick={() => setEditingProspect(p)} title="Edit" style={{ border: "none", background: "transparent", color: C.blueInk, cursor: "pointer", fontSize: 12, lineHeight: 1 }}>Edit</button>
                   <button onClick={() => remove(p)} title="Remove" style={{ border: "none", background: "transparent", color: C.faint, cursor: "pointer", fontSize: 15, lineHeight: 1 }}>×</button>
                 </span>
               ))}
@@ -66,6 +72,7 @@ export default function Settings() {
           <Row label="Drafting model" value="Set server-side via ANTHROPIC_MODEL (default claude-opus-4-8)" last />
         </Card>
       </Section>
+      {editingProspect && <EditProspectModal prospect={editingProspect} onClose={() => setEditingProspect(null)} onSave={saveProspect} />}
     </div>
   );
 }
@@ -83,5 +90,18 @@ function Row({ label, value, last }) {
     <div style={{ display: "flex", justifyContent: "space-between", padding: "11px 14px", borderBottom: last ? "none" : `1px solid ${C.line}`, fontSize: 13 }}>
       <span style={{ color: C.muted }}>{label}</span><span style={{ color: C.ink, textAlign: "right" }}>{value}</span>
     </div>
+  );
+}
+
+function EditProspectModal({ prospect, onClose, onSave }) {
+  const [d, setD] = useState(prospect);
+  return (
+    <Modal title="Edit Prospect / Client" onClose={onClose}>
+      <Field label="Name"><Input value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} autoFocus /></Field>
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button variant="primary" disabled={!d.name.trim()} onClick={() => onSave(d)}>Save</Button>
+      </div>
+    </Modal>
   );
 }

@@ -5,7 +5,7 @@ import { IconShield, IconBook, IconCheck } from "./icons.jsx";
 // Renders one project entry: question, gap/library pills, Claude draft, flag
 // callout, and the review controls (status + edit + promote). Ports the Phase-0
 // review card. q = project_entries row; callbacks persist to Supabase.
-export default function QuestionCard({ q, idx, prospect, libraryLabel, resolve, onStatusChange, onAnswerEdit, onPromote }) {
+export default function QuestionCard({ q, idx, prospect, libraryLabel, resolve, onStatusChange, onAnswerEdit, onPromote, onDelete }) {
   const [editing, setEditing] = useState(false);
   const [answer, setAnswer] = useState(q.edited_answer || q.draft_answer || "");
   const [promoted, setPromoted] = useState(false);
@@ -95,6 +95,7 @@ export default function QuestionCard({ q, idx, prospect, libraryLabel, resolve, 
         </select>
         <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
           {!editing && q.draft_answer && <button onClick={() => setEditing(true)} style={btn}>Edit</button>}
+          {onDelete && <button onClick={() => onDelete(idx)} style={{ ...btn, color: C.red, borderColor: C.redSoft }}>Delete</button>}
           {!promoted && q.status === "approved" && (
             <button onClick={() => { onPromote(idx); setPromoted(true); }} style={{ ...btn, background: C.greenSoft, border: "1px solid #BBE7CB", color: "#15803D" }}>Save to library</button>
           )}

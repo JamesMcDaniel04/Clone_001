@@ -11,6 +11,7 @@ export default function Templates() {
   const [rows, setRows] = useState(null);
   const [err, setErr] = useState(null);
   const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState(null);
   const [filters, setFilters] = useState({ search: "", createdBy: "all", type: "all", status: "all", broken: false });
 
   function load() { listProjects().then(setRows).catch((e) => setErr(e.message)); }
@@ -31,6 +32,15 @@ export default function Templates() {
 
   async function markDraft(t) {
     try { await updateProject(t.id, { status: "draft" }); load(); } catch (e) { setErr(e.message); }
+  }
+
+  async function saveTemplate(t) {
+    if (!t.name.trim()) return;
+    try {
+      await updateProject(t.id, { name: t.name.trim(), status: t.status });
+      setEditing(null);
+      load();
+    } catch (e) { setErr(e.message); }
   }
 
   const templates = (rows || []).filter((p) => p.is_template);
@@ -104,6 +114,7 @@ export default function Templates() {
                   <span>0</span>
                   <span style={{ color: t.status === "approved" ? C.green : C.blueInk }}>{STATUS_LABEL[t.status] || "Draft"}</span>
                   <span style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                    <button onClick={() => setEditing(t)} style={linkBtn}>Edit</button>
                     {t.status === "approved" && <button onClick={() => markDraft(t)} style={linkBtn}>Draft</button>}
                     <button onClick={() => remove(t)} style={{ ...linkBtn, color: C.red }}>Delete</button>
                   </span>
@@ -115,6 +126,7 @@ export default function Templates() {
       </section>
 
       {adding && <CreateTemplateModal onClose={() => setAdding(false)} onCreate={createTemplate} />}
+      {editing && <EditTemplateModal template={editing} onClose={() => setEditing(null)} onSave={saveTemplate} />}
     </div>
   );
 }
@@ -138,6 +150,27 @@ function CreateTemplateModal({ onClose, onCreate }) {
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
         <Button onClick={onClose}>Cancel</Button>
         <Button variant="primary" disabled={!name.trim()} onClick={() => onCreate(name.trim())}>Create</Button>
+      </div>
+    </Modal>
+  );
+}
+
+function EditTemplateModal({ template, onClose, onSave }) {
+  const [d, setD] = useState({ id: template.id, name: template.name, status: template.status || "draft" });
+  return (
+    <Modal title="Edit Template" onClose={onClose}>
+      <Field label="Template name">
+        <Input value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} autoFocus />
+      </Field>
+      <Field label="Status">
+        <Select value={d.status} onChange={(e) => setD({ ...d, status: e.target.value })}>
+          <option value="draft">Draft</option>
+          <option value="approved">Published</option>
+        </Select>
+      </Field>
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button variant="primary" disabled={!d.name.trim()} onClick={() => onSave(d)}>Save</Button>
       </div>
     </Modal>
   );
