@@ -22,9 +22,6 @@ create trigger t_library_documents_updated before update on public.library_docum
   for each row execute function public.touch_updated_at();
 
 alter table public.library_documents enable row level security;
-do $$ begin
-  if not exists (select 1 from pg_policies where polname = 'library_documents_authed_all') then
-    create policy "library_documents_authed_all" on public.library_documents
-      for all using (auth.uid() is not null) with check (auth.uid() is not null);
-  end if;
-end $$;
+drop policy if exists "library_documents_authed_all" on public.library_documents;
+create policy "library_documents_authed_all" on public.library_documents
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
