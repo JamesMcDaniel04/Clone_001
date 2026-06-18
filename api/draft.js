@@ -9,6 +9,8 @@ import { getLibrary } from "./_lib/library.js";
 import { getSupplementalSources } from "./_lib/sources.js";
 import { draftAnswers } from "./_lib/anthropic.js";
 
+const MAX_QUESTIONS_PER_REQUEST = 5;
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
@@ -23,6 +25,9 @@ export default async function handler(req, res) {
     const { questions, prospect, library: clientLibrary } = req.body || {};
     if (!Array.isArray(questions) || questions.length === 0) {
       return res.status(400).json({ error: "Provide a non-empty 'questions' array." });
+    }
+    if (questions.length > MAX_QUESTIONS_PER_REQUEST) {
+      return res.status(413).json({ error: `Drafting accepts up to ${MAX_QUESTIONS_PER_REQUEST} questions per request. Refresh the app and try again; the frontend now sends smaller batches.` });
     }
 
     // Prefer the library the client read (authenticated session); fall back to the

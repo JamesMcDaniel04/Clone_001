@@ -30,6 +30,10 @@ function statusFromDraft(d) {
   return "needs_legal";
 }
 
+const DRAFT_BATCH_SIZE = 3;
+const DRAFT_CONCURRENCY = 1;
+const MATCHES_PER_QUESTION = 6;
+
 export default function Project() {
   const { id } = useParams();
   const location = useLocation();
@@ -49,6 +53,7 @@ export default function Project() {
   const [matches, setMatches] = useState([]); // [{ question, entries }] shown live while drafting
   const [reportOpen, setReportOpen] = useState(false);
   const [reportBusy, setReportBusy] = useState(false);
+  const [draftProgress, setDraftProgress] = useState(null); // { done, total } while batching
 
   useEffect(() => {
     getProject(id).then(setProject).catch((e) => setErr(e.message));
@@ -121,40 +126,116 @@ export default function Project() {
     // Persist the original questionnaire (sections + checkbox options) so the
     // review-draft report can render it faithfully later.
     updateProject(id, { notes: raw }).then(setProject).catch(() => {});
+    setDraftProgress({ done: 0, total: parsed.length });
     setPhase("drafting");
     try {
-      // Pass the live (scoped) library from the client so drafting grounds on
-      // Supabase, not the server fallback.
-      const library = libraryTextFromEntries(scoped);
-      const res = await fetch("/api/draft", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ questions: parsed, prospect: project?.prospect || "Unknown", library }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Draft failed");
+      // Draft in small batches so each serverless call finishes well under the
+      // hosting timeout. Each batch sends only the matched library entries for
+      // those questions, which keeps the Claude prompt small on Vercel.
+      const batches = [];
+      for (let i = 0; i < parsed.length; i += DRAFT_BATCH_SIZE) batches.push(parsed.slice(i, i + DRAFT_BATCH_SIZE));
+      const results = new Array(batches.length);
+      let nextBatch = 0;
+      async function worker() {
+        while (nextBatch < batches.length) {
+          const bi = nextBatch++;
+          results[bi] = await draftBatch(batches[bi], batchLibraryForQuestions(batches[bi], scoped));
+          setDraftProgress((p) => ({ done: Math.min((p?.done || 0) + batches[bi].length, parsed.length), total: parsed.length }));
+        }
+      }
+      await Promise.all(Array.from({ length: Math.min(DRAFT_CONCURRENCY, batches.length) }, worker));
 
-      const rows = (data.answers || []).map((d, i) => ({
-        project_id: id,
-        question_id: d.question_id || `Q${i + 1}`,
-        question: d.question_text,
-        draft_answer: d.draft_answer || null,
-        edited_answer: d.draft_answer || null,
-        status: statusFromDraft(d),
-        flag: !!d.flag,
-        flag_type: d.flag_type || null,
-        flag_reason: d.flag_reason || null,
-        library_entries_used: d.library_entries_used || [],
-        position: i,
-      }));
+      // Build rows per batch so a short/long batch never misaligns later questions.
+      // Use the ORIGINAL question text (keeps checkbox options for the report).
+      const rows = [];
+      let pos = 0;
+      batches.forEach((batchQs, bi) => {
+        const ans = results[bi] || [];
+        batchQs.forEach((qText, j) => {
+          const d = ans[j] || {
+            question_id: `Q${pos + 1}`,
+            question_text: qText,
+            draft_answer: null,
+            flag: true,
+            flag_type: "No library match",
+            flag_reason: "No answer was returned for this question.",
+            library_entries_used: [],
+          };
+          rows.push({
+            project_id: id,
+            question_id: d.question_id || `Q${pos + 1}`,
+            question: qText,
+            draft_answer: d.draft_answer || null,
+            edited_answer: d.draft_answer || null,
+            status: statusFromDraft(d),
+            flag: !!d.flag,
+            flag_type: d.flag_type || null,
+            flag_reason: d.flag_reason || null,
+            library_entries_used: d.library_entries_used || [],
+            position: pos,
+          });
+          pos++;
+        });
+      });
       const saved = await insertProjectEntries(rows);
       setEntries(saved);
       setRaw("");
       setPhase("idle");
+      setDraftProgress(null);
     } catch (e) {
       setErr(e.message);
       setPhase("idle");
+      setDraftProgress(null);
     }
+  }
+
+  function batchLibraryForQuestions(questions, scopedEntries) {
+    const seen = new Set();
+    const matched = [];
+    for (const question of questions) {
+      for (const entry of matchLibraryEntries(question, scopedEntries, MATCHES_PER_QUESTION)) {
+        const key = `${entry.question}\n${entry.answer || ""}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        matched.push(entry);
+      }
+    }
+    return libraryTextFromEntries(matched) || "### Matched Supabase Library\nNo matching Supabase library entries were found for this batch. Use supplemental sources only when they directly answer the question; otherwise flag the answer as No library match.";
+  }
+
+  async function readApiJson(res, fallbackLabel) {
+    const body = await res.text().catch(() => "");
+    if (res.status === 504 || res.status === 502) {
+      throw new Error(`${fallbackLabel} timed out on Vercel. Try fewer questions or a narrower library category, then run it again.`);
+    }
+    let data = null;
+    if (body) {
+      try { data = JSON.parse(body); } catch {
+        const details = body.slice(0, 180);
+        throw new Error(res.ok ? `${fallbackLabel} returned an invalid response.` : `${fallbackLabel} failed (HTTP ${res.status}). ${details}`);
+      }
+    }
+    if (!res.ok) {
+      throw new Error(data?.error || `${fallbackLabel} failed (HTTP ${res.status})`);
+    }
+    return data || {};
+  }
+
+  // Draft one small batch of questions; surfaces readable errors when the
+  // serverless function times out (504 → HTML, not JSON) or otherwise fails.
+  async function draftBatch(questions, library) {
+    let res;
+    try {
+      res = await fetch("/api/draft", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ questions, prospect: project?.prospect || "Unknown", library }),
+      });
+    } catch (e) {
+      throw new Error(`Network error contacting the drafting service: ${e.message}`);
+    }
+    const data = await readApiJson(res, "Draft batch");
+    return data.answers || [];
   }
 
   function patch(idx, fields) {
@@ -293,8 +374,7 @@ export default function Project() {
       } finally {
         clearTimeout(timer);
       }
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Report failed");
+      const data = await readApiJson(res, "Report generation");
 
       // Styled, print-to-PDF document with the report's UI elements.
       const html = reportToHtml(data.report, meta2);
@@ -366,6 +446,7 @@ export default function Project() {
 
       {phase === "drafting" ? (
         <div>
+          <DraftProgress prospect={project.prospect} done={draftProgress?.done || 0} total={draftProgress?.total || matches.length} />
           <Stepper statuses={["complete", "complete", "active", "pending"]} />
           {matches.map((m, i) => (
             <div key={m.question + i} style={{ border: `1px solid ${C.cardLine}`, borderRadius: 16, padding: "18px 20px", marginBottom: 14, background: "#fff" }}>
@@ -386,7 +467,6 @@ export default function Project() {
               )}
             </div>
           ))}
-          <Spinner label={`Drafting answers for ${project.prospect || "this project"}…`} />
         </div>
       ) : !hasEntries ? (
         <div>
@@ -504,6 +584,33 @@ function ReviewGroup({ title, hint, children }) {
       </div>
       {children}
     </section>
+  );
+}
+
+function DraftProgress({ prospect, done, total }) {
+  const pct = total ? Math.round((done / total) * 100) : 0;
+  return (
+    <div style={{ position: "sticky", top: 8, zIndex: 6, marginBottom: 20, background: "#fff", border: `1px solid ${C.cardLine}`, borderRadius: 16, padding: "18px 20px", boxShadow: "0 6px 20px rgba(16,24,40,0.10)" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <span style={{ display: "inline-flex", gap: 4 }}>
+            {[0, 1, 2].map((i) => <span key={i} style={{ width: 8, height: 8, borderRadius: "50%", background: C.blue, animation: `dpulse 1.2s ease-in-out ${i * 0.2}s infinite` }} />)}
+          </span>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: C.ink }}>Drafting answers{prospect ? ` for ${prospect}` : ""}…</div>
+            <div style={{ fontSize: 12.5, color: C.muted, marginTop: 2 }}>
+              {done} of {total} questions grounded &amp; drafted{total && done < total ? " · long questionnaires run in batches" : ""}
+            </div>
+          </div>
+        </div>
+        <div style={{ fontSize: 26, fontWeight: 800, color: C.blueInk, fontVariantNumeric: "tabular-nums" }}>{pct}%</div>
+      </div>
+      <div style={{ position: "relative", height: 10, background: C.panel, borderRadius: 999, overflow: "hidden" }}>
+        <div style={{ position: "absolute", insetBlock: 0, left: 0, width: `${pct}%`, background: `linear-gradient(90deg, ${C.blue}, ${C.blueInk})`, borderRadius: 999, transition: "width .5s cubic-bezier(.4,0,.2,1)" }} />
+        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(90deg, transparent, rgba(255,255,255,.55), transparent)", animation: "dshimmer 1.4s linear infinite" }} />
+      </div>
+      <style>{`@keyframes dpulse{0%,100%{opacity:.3;transform:scale(.8)}50%{opacity:1;transform:scale(1)}}@keyframes dshimmer{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}`}</style>
+    </div>
   );
 }
 

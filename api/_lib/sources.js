@@ -16,7 +16,8 @@ const CACHE_MS = 30 * 60 * 1000;
 function configuredUrls() {
   const raw = process.env.KNOWLEDGE_SOURCE_URLS || "";
   const extra = raw.split(/[\n,]/).map((s) => s.trim()).filter(Boolean);
-  return [...new Set([...DEFAULT_URLS, ...extra])];
+  const defaults = process.env.FETCH_DEFAULT_KNOWLEDGE_SOURCE_URLS === "true" ? DEFAULT_URLS : [];
+  return [...new Set([...defaults, ...extra])];
 }
 
 function htmlToText(html) {
@@ -52,12 +53,13 @@ export async function getSupplementalSources() {
   const now = Date.now();
   if (cached && now - cachedAt < CACHE_MS) return cached;
 
-  const fetched = await Promise.all(configuredUrls().map(fetchSource));
+  const urls = configuredUrls();
+  const fetched = urls.length ? await Promise.all(urls.map(fetchSource)) : [];
   cached = [
     SOURCE_COVERAGE,
-    "## Live Public / Configured Source Fetches",
+    urls.length ? "## Live Public / Configured Source Fetches" : "",
     ...fetched.filter(Boolean),
-  ].join("\n\n");
+  ].filter(Boolean).join("\n\n");
   cachedAt = now;
   return cached;
 }

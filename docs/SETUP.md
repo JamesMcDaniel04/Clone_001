@@ -45,6 +45,7 @@ Fill in `.env.local`:
 | `ANTHROPIC_API_KEY` | Anthropic console |
 | `ANTHROPIC_MODEL` | optional; default `claude-opus-4-8`, or `claude-sonnet-4-6` for cheaper/faster |
 | `KNOWLEDGE_SOURCE_URLS` | optional comma/newline-separated URLs for trust portal, Seismic, API docs, or other public/hosted source materials |
+| `FETCH_DEFAULT_KNOWLEDGE_SOURCE_URLS` | optional; set `true` to live-fetch the built-in public People.ai URLs. Leave blank on Vercel if drafting times out. |
 
 ---
 

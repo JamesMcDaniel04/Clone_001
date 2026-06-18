@@ -7,7 +7,7 @@ import { pathToFileURL } from "node:url";
 // local development needs no Vercel CLI. In production, Vercel serves api/*.js
 // natively and this plugin does nothing (apply: "serve").
 function devApi(env) {
-  const SERVER_KEYS = ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "ANTHROPIC_API_KEY", "ANTHROPIC_MODEL", "LIBRARY_DOC_URL", "KNOWLEDGE_SOURCE_URLS"];
+  const SERVER_KEYS = ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "ANTHROPIC_API_KEY", "ANTHROPIC_MODEL", "LIBRARY_DOC_URL", "KNOWLEDGE_SOURCE_URLS", "FETCH_DEFAULT_KNOWLEDGE_SOURCE_URLS"];
   return {
     name: "dev-api",
     apply: "serve",
