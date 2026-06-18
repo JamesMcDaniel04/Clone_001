@@ -15,6 +15,7 @@ import LibraryCategory from "./pages/library/Category.jsx";
 import MergeVariables from "./pages/library/MergeVariables.jsx";
 import Tags from "./pages/library/Tags.jsx";
 import LibrarySearch from "./pages/library/Search.jsx";
+import LibraryDocuments from "./pages/library/Documents.jsx";
 import Settings from "./pages/Settings.jsx";
 import SetupWizard from "./pages/SetupWizard.jsx";
 
@@ -54,6 +55,7 @@ export default function App() {
         <Route path="/library/merge-variables" element={<MergeVariables />} />
         <Route path="/library/tags" element={<Tags />} />
         <Route path="/library/search" element={<LibrarySearch />} />
+        <Route path="/library/documents" element={<LibraryDocuments />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/setup" element={<SetupWizard />} />
         <Route path="*" element={<Home />} />

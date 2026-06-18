@@ -71,6 +71,7 @@ export default function TopNav() {
         <NavMenu label="Library" to="/library" items={[
           { label: "Search", to: "/library/search" },
           { label: "Library Management", to: "/library" },
+          { label: "Documents", to: "/library/documents" },
           { label: "Merge Variables", to: "/library/merge-variables" },
           { label: "Tags", to: "/library/tags" },
         ]} />

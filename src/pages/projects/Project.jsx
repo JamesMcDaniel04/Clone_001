@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useLocation } from "react-router-dom";
 import { C } from "../../lib/theme.js";
-import { getProject, getProjectEntries, insertProjectEntries, updateProjectEntry, deleteProjectEntry, createEntry, listMergeVariables, updateProject, getLibraryEntries, libraryTextFromEntries, listCategories } from "../../lib/db.js";
+import { getProject, getProjectEntries, insertProjectEntries, updateProjectEntry, deleteProjectEntry, createEntry, listMergeVariables, updateProject, getLibraryEntries, libraryTextFromEntries, listCategories, getKnowledgeEntries } from "../../lib/db.js";
 import { PageHeader, Button, Spinner, Modal, Field, Input, Select } from "../../components/ui.jsx";
 import Stepper from "../../components/Stepper.jsx";
 import QuestionCard from "../../components/QuestionCard.jsx";
@@ -129,9 +129,13 @@ export default function Project() {
     setDraftProgress({ done: 0, total: parsed.length });
     setPhase("drafting");
     try {
+      // Fold the knowledge "brain" — uploaded documents + previously approved
+      // answers — into the matchable pool so drafting grounds on them too.
+      const knowledge = await getKnowledgeEntries().catch(() => []);
+      const pool = knowledge.length ? [...scoped, ...knowledge] : scoped;
       // Draft in small batches so each serverless call finishes well under the
-      // hosting timeout. Each batch sends only the matched library entries for
-      // those questions, which keeps the Claude prompt small on Vercel.
+      // hosting timeout. Each batch sends only the matched entries for those
+      // questions, which keeps the Claude prompt small on Vercel.
       const batches = [];
       for (let i = 0; i < parsed.length; i += DRAFT_BATCH_SIZE) batches.push(parsed.slice(i, i + DRAFT_BATCH_SIZE));
       const results = new Array(batches.length);
@@ -139,7 +143,7 @@ export default function Project() {
       async function worker() {
         while (nextBatch < batches.length) {
           const bi = nextBatch++;
-          results[bi] = await draftBatch(batches[bi], batchLibraryForQuestions(batches[bi], scoped));
+          results[bi] = await draftBatch(batches[bi], batchLibraryForQuestions(batches[bi], pool));
           setDraftProgress((p) => ({ done: Math.min((p?.done || 0) + batches[bi].length, parsed.length), total: parsed.length }));
         }
       }

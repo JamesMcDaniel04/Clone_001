@@ -69,6 +69,74 @@ export async function getLibraryText() {
   return libraryTextFromEntries(await getLibraryEntries());
 }
 
+// ── Library documents (uploaded certs/policies — the knowledge "brain") ───────
+export async function listDocuments() {
+  return unwrap(
+    await supabase
+      .from("library_documents")
+      .select("id, name, doc_type, file_type, file_size, created_at, category:category_id(name)")
+      .order("created_at", { ascending: false })
+      .limit(500)
+  );
+}
+export async function createDocument(fields) {
+  return unwrap(await supabase.from("library_documents").insert(fields).select().single());
+}
+export async function deleteDocument(id) { unwrap(await supabase.from("library_documents").delete().eq("id", id)); }
+
+// Uploaded documents as matchable entries: each doc's text is split into chunks so
+// the drafter's per-question matcher can surface only the relevant cert/policy
+// excerpts (keeps the prompt small). Grouped under "Source Documents" for provenance.
+export async function getDocumentEntries({ chunkChars = 1400, maxChunksPerDoc = 25 } = {}) {
+  try {
+    const data = unwrap(
+      await supabase.from("library_documents").select("name, doc_type, extracted_text").not("extracted_text", "is", null).limit(200)
+    );
+    const out = [];
+    for (const d of data) {
+      const text = (d.extracted_text || "").replace(/\s+/g, " ").trim();
+      if (!text) continue;
+      const label = `${d.name}${d.doc_type ? ` (${d.doc_type})` : ""}`;
+      for (let i = 0, n = 0; i < text.length && n < maxChunksPerDoc; i += chunkChars, n++) {
+        out.push({ question: label, answer: text.slice(i, i + chunkChars), category: { name: "Source Documents" }, category_id: null });
+      }
+    }
+    return out;
+  } catch { return []; } // table not migrated yet → no documents context
+}
+
+// Previously approved/edited answers across projects & templates, as matchable
+// entries grouped under "Previously Answered Questions".
+export async function getApprovedAnswerEntries({ limit = 500 } = {}) {
+  try {
+    const data = unwrap(
+      await supabase
+        .from("project_entries")
+        .select("question, edited_answer, status, updated_at")
+        .in("status", ["approved", "edited"])
+        .not("edited_answer", "is", null)
+        .order("updated_at", { ascending: false })
+        .limit(limit)
+    );
+    const seen = new Set();
+    const out = [];
+    for (const r of data) {
+      const key = (r.question || "").trim().toLowerCase();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      out.push({ question: r.question, answer: r.edited_answer, category: { name: "Previously Answered Questions" }, category_id: null });
+    }
+    return out;
+  } catch { return []; }
+}
+
+// The knowledge "brain" beyond the Q&A library: uploaded documents + past answers,
+// returned as matchable entries to fold into the drafting pool.
+export async function getKnowledgeEntries() {
+  const [answers, docs] = await Promise.all([getApprovedAnswerEntries(), getDocumentEntries()]);
+  return [...answers, ...docs];
+}
+
 // ── Tags ────────────────────────────────────────────────────────────────────
 export async function listTags() {
   return unwrap(await supabase.from("tags").select("*").order("name"));
