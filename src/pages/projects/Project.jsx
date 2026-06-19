@@ -30,8 +30,8 @@ function statusFromDraft(d) {
   return "needs_legal";
 }
 
-const DRAFT_BATCH_SIZE = 3;
-const DRAFT_CONCURRENCY = 1;
+const DRAFT_BATCH_SIZE = 6;   // questions per serverless call (≤ server's MAX_QUESTIONS_PER_REQUEST)
+const DRAFT_CONCURRENCY = 6;  // batches drafted in parallel — the whole questionnaire runs in a few waves
 const MATCHES_PER_QUESTION = 6;
 
 export default function Project() {
@@ -225,9 +225,10 @@ export default function Project() {
     return data || {};
   }
 
-  // Draft one small batch of questions; surfaces readable errors when the
-  // serverless function times out (504 → HTML, not JSON) or otherwise fails.
-  async function draftBatch(questions, library) {
+  // Draft one small batch of questions. Retries transient failures (rate limits /
+  // overload / timeouts) with backoff so high concurrency never fails the whole
+  // run; surfaces readable errors otherwise.
+  async function draftBatch(questions, library, attempt = 0) {
     let res;
     try {
       res = await fetch("/api/draft", {
@@ -236,7 +237,12 @@ export default function Project() {
         body: JSON.stringify({ questions, prospect: project?.prospect || "Unknown", library }),
       });
     } catch (e) {
+      if (attempt < 3) { await new Promise((r) => setTimeout(r, 800 * (attempt + 1))); return draftBatch(questions, library, attempt + 1); }
       throw new Error(`Network error contacting the drafting service: ${e.message}`);
+    }
+    if ([429, 502, 503, 504, 529].includes(res.status) && attempt < 4) {
+      await new Promise((r) => setTimeout(r, 1200 * (attempt + 1)));
+      return draftBatch(questions, library, attempt + 1);
     }
     const data = await readApiJson(res, "Draft batch");
     return data.answers || [];

@@ -81,8 +81,12 @@ ${questions.map((q, i) => `Q${i + 1}: ${q}`).join("\n\n")}`;
   // cacheable so repeated runs in a session reuse the prefix.
   const stream = client.messages.stream({
     model: MODEL,
-    max_tokens: 32000,
-    thinking: { type: "adaptive" },
+    max_tokens: 12000,
+    // Thinking OFF: drafting from a grounded library is extraction/synthesis, not
+    // deep reasoning. Extended thinking is the main reason this felt far slower
+    // than pasting the questions into a normal Claude chat (which doesn't think
+    // per answer). Disabling it makes each batch return quickly.
+    thinking: { type: "disabled" },
     system: [
       {
         type: "text",

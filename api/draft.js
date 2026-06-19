@@ -9,7 +9,10 @@ import { getLibrary } from "./_lib/library.js";
 import { getSupplementalSources } from "./_lib/sources.js";
 import { draftAnswers } from "./_lib/anthropic.js";
 
-const MAX_QUESTIONS_PER_REQUEST = 5;
+// Safety valve so one request can't run long enough to hit the serverless timeout.
+// The frontend batches the full questionnaire into chunks below this — there is no
+// limit on the total number of questions a user can upload.
+const MAX_QUESTIONS_PER_REQUEST = 10;
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -27,7 +30,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Provide a non-empty 'questions' array." });
     }
     if (questions.length > MAX_QUESTIONS_PER_REQUEST) {
-      return res.status(413).json({ error: `Drafting accepts up to ${MAX_QUESTIONS_PER_REQUEST} questions per request. Refresh the app and try again; the frontend now sends smaller batches.` });
+      return res.status(413).json({ error: `This drafting request had ${questions.length} questions; each request handles up to ${MAX_QUESTIONS_PER_REQUEST}. The app batches automatically — hard-refresh to load the latest version.` });
     }
 
     // Prefer the library the client read (authenticated session); fall back to the
