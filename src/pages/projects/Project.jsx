@@ -58,6 +58,7 @@ export default function Project() {
   const [reportOpen, setReportOpen] = useState(false);
   const [reportBusy, setReportBusy] = useState(false);
   const [draftProgress, setDraftProgress] = useState(null); // { done, total } while batching
+  const [draftStartedAt, setDraftStartedAt] = useState(null); // ms timestamp the current draft run began
   const [filter, setFilter] = useState("all"); // all | gap | review | approved — drives the bucket chips
   const [rechecking, setRechecking] = useState(false); // re-drafting gaps against the latest library
   const [vendorName, setVendorName] = useState(""); // org name (Settings) — default vendor in the report
@@ -135,6 +136,8 @@ export default function Project() {
     // review-draft report can render it faithfully later.
     updateProject(id, { notes: raw }).then(setProject).catch(() => {});
     setDraftProgress({ done: 0, total: parsed.length });
+    const startedAt = Date.now();
+    setDraftStartedAt(startedAt);
     setPhase("drafting");
     try {
       // Fold the knowledge "brain" — uploaded documents + previously approved
@@ -165,6 +168,11 @@ export default function Project() {
       setRaw("");
       setPhase("idle");
       setDraftProgress(null);
+      // Record how long the first draft took — the headline time-saving metric.
+      const secs = Math.max(1, Math.round((Date.now() - startedAt) / 1000));
+      if (!project.first_draft_seconds) {
+        updateProject(id, { first_draft_seconds: secs }).then(setProject).catch(() => {});
+      }
     } catch (e) {
       setErr(e.message);
       setPhase("idle");
@@ -512,7 +520,7 @@ export default function Project() {
     <div>
       <PageHeader
         title={project.name}
-        subtitle={`${project.prospect || "—"} · ${entries.length} questions${project.is_template ? " · Template" : ""}`}
+        subtitle={`${project.prospect || "—"} · ${entries.length} questions${project.is_template ? " · Template" : ""}${project.first_draft_seconds ? ` · First draft load time: ${project.first_draft_seconds}s` : ""}`}
         actions={
           <div style={{ display: "flex", gap: 8 }}>
             {!project.is_template && <Button onClick={saveAsTemplate}>Save as Template</Button>}
@@ -527,7 +535,7 @@ export default function Project() {
 
       {phase === "drafting" ? (
         <div>
-          <DraftProgress prospect={project.prospect} done={draftProgress?.done || 0} total={draftProgress?.total || matches.length} />
+          <DraftProgress prospect={project.prospect} done={draftProgress?.done || 0} total={draftProgress?.total || matches.length} startTime={draftStartedAt} />
           <Stepper statuses={["complete", "complete", "active", "pending"]} />
           {matches.map((m, i) => (
             <div key={m.question + i} style={{ border: `1px solid ${C.cardLine}`, borderRadius: 16, padding: "18px 20px", marginBottom: 14, background: "#fff" }}>
@@ -679,8 +687,14 @@ function ReviewGroup({ title, hint, children }) {
   );
 }
 
-function DraftProgress({ prospect, done, total }) {
+function DraftProgress({ prospect, done, total, startTime }) {
   const pct = total ? Math.round((done / total) * 100) : 0;
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(t);
+  }, []);
+  const elapsed = startTime ? Math.max(0, Math.round((now - startTime) / 1000)) : 0;
   return (
     <div style={{ position: "sticky", top: 8, zIndex: 6, marginBottom: 20, background: "#fff", border: `1px solid ${C.cardLine}`, borderRadius: 16, padding: "18px 20px", boxShadow: "0 6px 20px rgba(16,24,40,0.10)" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
@@ -695,7 +709,10 @@ function DraftProgress({ prospect, done, total }) {
             </div>
           </div>
         </div>
-        <div style={{ fontSize: 26, fontWeight: 800, color: C.blueInk, fontVariantNumeric: "tabular-nums" }}>{pct}%</div>
+        <div style={{ textAlign: "right" }}>
+          <div style={{ fontSize: 26, fontWeight: 800, color: C.blueInk, fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>{pct}%</div>
+          <div style={{ fontSize: 12.5, fontWeight: 600, color: C.muted, fontVariantNumeric: "tabular-nums", marginTop: 3 }}>{elapsed}s elapsed</div>
+        </div>
       </div>
       <div style={{ position: "relative", height: 10, background: C.panel, borderRadius: 999, overflow: "hidden" }}>
         <div style={{ position: "absolute", insetBlock: 0, left: 0, width: `${pct}%`, background: `linear-gradient(90deg, ${C.blue}, ${C.blueInk})`, borderRadius: 999, transition: "width .5s cubic-bezier(.4,0,.2,1)" }} />

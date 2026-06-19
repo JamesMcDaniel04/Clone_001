@@ -28,7 +28,17 @@ export default function List() {
     try { await deleteProject(p.id); load(); } catch (e) { setErr(e.message); }
   }
   async function saveEdit(d) {
-    try { await updateProject(d.id, { name: d.name, prospect: d.prospect, status: d.status }); setEditingProject(null); load(); } catch (e) { setErr(e.message); }
+    try {
+      const fields = { name: d.name, prospect: d.prospect, status: d.status };
+      // Stamp completion time the first time a project reaches a submitted status,
+      // and clear it if it's reopened — drives the Home completion-time metric.
+      const done = d.status === "sent" || d.status === "approved";
+      if (done && !editingProject.submitted_at) fields.submitted_at = new Date().toISOString();
+      else if (!done && editingProject.submitted_at) fields.submitted_at = null;
+      await updateProject(d.id, fields);
+      setEditingProject(null);
+      load();
+    } catch (e) { setErr(e.message); }
   }
 
   const owners = [...new Set((rows || []).map((p) => p.owner?.full_name).filter(Boolean))];

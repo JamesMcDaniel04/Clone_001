@@ -17,6 +17,21 @@ export default function Home() {
     listGapEntries().then(setGaps).catch(() => setGaps([]));
   }, []);
 
+  // Time metrics — surface AI savings (avg first-draft time) and completion speed.
+  const projectList = (projects || []).filter((p) => !p.is_template);
+  const completedProjects = projectList.filter((p) => p.submitted_at && p.created_at);
+  const openProjects = projectList.filter((p) => !p.submitted_at);
+  const avgCompleteHours = completedProjects.length
+    ? Math.round(completedProjects.reduce((s, p) => s + (Date.parse(p.submitted_at) - Date.parse(p.created_at)) / 3.6e6, 0) / completedProjects.length)
+    : null;
+  const withDraft = projectList.filter((p) => p.first_draft_seconds);
+  const avgDraftSeconds = withDraft.length
+    ? Math.round(withDraft.reduce((s, p) => s + p.first_draft_seconds, 0) / withDraft.length)
+    : null;
+  const oldestOpenHours = openProjects.length
+    ? Math.max(...openProjects.map((p) => (Date.now() - Date.parse(p.created_at)) / 3.6e6))
+    : 0;
+
   return (
     <div>
       <div style={{ background: C.navy, borderRadius: 16, padding: "26px 28px", marginBottom: 24, color: "#fff", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -32,6 +47,12 @@ export default function Home() {
 
       {err && <div style={{ color: C.red, fontSize: 13, marginBottom: 16 }}>{err}</div>}
 
+      <div style={{ display: "flex", gap: 12, marginBottom: 24, flexWrap: "wrap" }}>
+        <StatCard label="Average time to complete" value={avgCompleteHours == null ? "—" : `${avgCompleteHours} hours`} hint={completedProjects.length ? `across ${completedProjects.length} completed project${completedProjects.length === 1 ? "" : "s"}` : "complete a project to start the clock"} accent={C.blueInk} />
+        <StatCard label="Avg first-draft time" value={avgDraftSeconds == null ? "—" : `${avgDraftSeconds}s`} hint="AI drafting time saved per questionnaire" accent={C.green} />
+        <StatCard label="Open projects" value={openProjects.length} hint={openProjects.length ? `oldest open ${fmtHours(oldestOpenHours)}` : "all caught up"} />
+      </div>
+
       <Section title="My Project Tasks">
         {projects == null ? <Spinner /> : projects.length === 0 ? (
           <Empty title="No project tasks right now." />
@@ -40,7 +61,7 @@ export default function Home() {
             <Row key={p.id} onClick={() => nav(`/projects/${p.id}`)}>
               <div>
                 <div style={{ fontSize: 14, fontWeight: 600, color: C.ink }}>{p.name}</div>
-                <div style={{ fontSize: 12, color: C.muted }}>{p.prospect || "—"} · {p.entries?.[0]?.count ?? 0} questions</div>
+                <div style={{ fontSize: 12, color: C.muted }}>{p.prospect || "—"} · {p.entries?.[0]?.count ?? 0} questions · {ageLabel(p)}</div>
               </div>
               <StatusTag status={p.status} />
             </Row>
@@ -67,6 +88,29 @@ export default function Home() {
       <Section title="My Reviews">
         <Empty title="No reviews have been completed yet." hint="Reviewed answers will appear here after the team starts approving library or project responses." />
       </Section>
+    </div>
+  );
+}
+
+function fmtHours(h) {
+  if (h == null || Number.isNaN(h)) return "—";
+  if (h < 1) return "<1h";
+  if (h < 48) return `${Math.round(h)}h`;
+  return `${Math.round(h / 24)}d`;
+}
+
+function ageLabel(p) {
+  if (!p.created_at) return "";
+  if (p.submitted_at) return `completed in ${fmtHours((Date.parse(p.submitted_at) - Date.parse(p.created_at)) / 3.6e6)}`;
+  return `open ${fmtHours((Date.now() - Date.parse(p.created_at)) / 3.6e6)}`;
+}
+
+function StatCard({ label, value, hint, accent }) {
+  return (
+    <div style={{ flex: "1 1 200px", minWidth: 180, background: "#fff", border: `1px solid ${C.cardLine}`, borderRadius: 12, padding: "14px 16px" }}>
+      <div style={{ fontSize: 12, color: C.muted, fontWeight: 600 }}>{label}</div>
+      <div style={{ fontSize: 24, fontWeight: 800, color: accent || C.ink, marginTop: 4, fontVariantNumeric: "tabular-nums" }}>{value}</div>
+      {hint && <div style={{ fontSize: 11.5, color: C.faint, marginTop: 2 }}>{hint}</div>}
     </div>
   );
 }
