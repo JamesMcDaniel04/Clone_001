@@ -15,6 +15,7 @@ export default function QuestionCard({ q, idx, prospect, category, libraryLabel,
   const rawAnswer = q.edited_answer || q.draft_answer || "";
   const shownAnswer = resolve ? resolve(rawAnswer) : rawAnswer;
   const mvApplied = shownAnswer !== rawAnswer;
+  const hasAnswer = !!(q.edited_answer || q.draft_answer);
 
   // Claude classifies answers into the three review buckets (approved /
   // needs_review / gap); draft & edited are manual states. Legacy needs_legal /
@@ -84,23 +85,22 @@ export default function QuestionCard({ q, idx, prospect, category, libraryLabel,
         <div style={{ fontSize: 12, color: C.faint }}>Draft against: {libraryLabel}</div>
       </div>
 
-      {q.draft_answer ? (
-        editing ? (
-          <div>
-            <textarea value={answer} onChange={(e) => setAnswer(e.target.value)} style={{ width: "100%", minHeight: 140, fontSize: 14, lineHeight: 1.7, border: `1px solid ${C.blueSoft}`, borderRadius: 10, padding: "12px 14px", resize: "vertical", boxSizing: "border-box", fontFamily: "inherit", color: C.body }} />
-            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-              <button onClick={() => { onAnswerEdit(idx, answer); setEditing(false); }} style={{ ...btn, background: C.blue, color: "#fff", border: `1px solid ${C.blue}` }}>Save edit</button>
-              <button onClick={() => { setAnswer(q.edited_answer || q.draft_answer || ""); setEditing(false); }} style={btn}>Cancel</button>
-            </div>
+      {editing ? (
+        <div>
+          <textarea value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder="Type an answer to close this gap…" style={{ width: "100%", minHeight: 140, fontSize: 14, lineHeight: 1.7, border: `1px solid ${C.blueSoft}`, borderRadius: 10, padding: "12px 14px", resize: "vertical", boxSizing: "border-box", fontFamily: "inherit", color: C.body }} />
+          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+            <button onClick={() => { onAnswerEdit(idx, answer); setEditing(false); }} style={{ ...btn, background: C.blue, color: "#fff", border: `1px solid ${C.blue}` }}>Save edit</button>
+            <button onClick={() => { setAnswer(q.edited_answer || q.draft_answer || ""); setEditing(false); }} style={btn}>Cancel</button>
           </div>
-        ) : (
-          <div style={{ border: `1px solid ${C.cardLine}`, borderRadius: 12, padding: "14px 16px", background: C.panel, fontSize: 14, lineHeight: 1.7, color: C.body, whiteSpace: "pre-wrap" }}>
-            {shownAnswer}
-          </div>
-        )
+        </div>
+      ) : hasAnswer ? (
+        <div style={{ border: `1px solid ${C.cardLine}`, borderRadius: 12, padding: "14px 16px", background: C.panel, fontSize: 14, lineHeight: 1.7, color: C.body, whiteSpace: "pre-wrap" }}>
+          {shownAnswer}
+        </div>
       ) : (
-        <div style={{ border: "1px solid #F1D9D6", borderRadius: 12, padding: "14px 16px", background: "#FDF4F3", fontSize: 13.5, color: "#B4453B", fontStyle: "italic" }}>
-          Gap — no answer in the library yet. Add one to close it, or edit a manual answer here.
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", border: "1px solid #F1D9D6", borderRadius: 12, padding: "14px 16px", background: "#FDF4F3", fontSize: 13.5, color: "#B4453B" }}>
+          <span style={{ fontStyle: "italic" }}>Gap — no answer in the library yet.</span>
+          <button onClick={() => setEditing(true)} style={{ ...btn, background: "#fff", borderColor: "#F1D9D6", color: "#B4453B", fontWeight: 600, fontStyle: "normal" }}>Answer this gap</button>
         </div>
       )}
 
@@ -117,8 +117,8 @@ export default function QuestionCard({ q, idx, prospect, category, libraryLabel,
         </select>
         <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
           {compact && <button onClick={() => setExpanded(false)} style={btn}>Collapse</button>}
-          {!editing && q.draft_answer && <button onClick={() => setEditing(true)} style={btn}>Edit</button>}
-          {q.status !== "approved" && q.draft_answer && <button onClick={() => onStatusChange(idx, "approved")} style={{ ...btn, background: C.greenSoft, border: "1px solid #BBE7CB", color: "#15803D", fontWeight: 600 }}>Approve</button>}
+          {!editing && hasAnswer && <button onClick={() => setEditing(true)} style={btn}>Edit</button>}
+          {q.status !== "approved" && hasAnswer && <button onClick={() => onStatusChange(idx, "approved")} style={{ ...btn, background: C.greenSoft, border: "1px solid #BBE7CB", color: "#15803D", fontWeight: 600 }}>Approve</button>}
           {onDelete && <button onClick={() => onDelete(idx)} style={{ ...btn, color: C.red, borderColor: C.redSoft }}>Delete</button>}
           {!promoted && q.status === "approved" && (
             <button onClick={() => { onPromote(idx); setPromoted(true); }} style={{ ...btn, background: C.greenSoft, border: "1px solid #BBE7CB", color: "#15803D" }}>Save to library</button>

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { C, STATUS_DOT, STATUS_LABEL } from "../../lib/theme.js";
 import { listEntries, listCategories, createEntry, updateEntry, deleteEntry } from "../../lib/db.js";
-import { fileKind, readPdf, readDocx, readTextFile } from "../../lib/importParsers.js";
+import { fileKind, readPdf, readDocx, readTextFile, fetchUrlContent } from "../../lib/importParsers.js";
 import { PageHeader, Button, Spinner, Empty, Modal, Field, Input, Select, StatusDot } from "../../components/ui.jsx";
 
 const STATUSES = ["never_reviewed", "unassigned", "assigned", "approved_with_edits", "approved_without_edits"];
@@ -37,6 +37,7 @@ export default function Category() {
         source_type: d.source_type,
         file_type: d.file_type || null,
         file_size: d.file_size || null,
+        source_url: d.source_url || null,
         status: "never_reviewed",
       });
       setAdding(false);
@@ -68,13 +69,15 @@ const ta = { width: "100%", minHeight: 200, fontSize: 13, lineHeight: 1.6, paddi
 const iconBtn = { fontSize: 11.5, padding: "5px 11px", borderRadius: 7, border: `1px solid ${C.line}`, background: "#fff", color: C.body, cursor: "pointer", fontFamily: "inherit" };
 const fmtSize = (n) => (n ? `${(n / 1024).toFixed(n > 1024 * 100 ? 0 : 1)} KB` : "");
 
-// Add content: paste text, or upload a file whose text is extracted. No more
-// question/answer fields — an entry is just a titled block of knowledge content.
+// Add content: paste text, upload a file, or import a web page by URL — all three
+// land as a titled block of knowledge content. No more question/answer fields.
 function AddModal({ onClose, onSave, onError }) {
-  const [mode, setMode] = useState("text"); // "text" | "file"
+  const [mode, setMode] = useState("text"); // "text" | "file" | "url"
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [file, setFile] = useState(null); // { file_type, file_size }
+  const [url, setUrl] = useState("");
+  const [sourceUrl, setSourceUrl] = useState(null); // set once a URL is fetched
   const [busy, setBusy] = useState(false);
 
   async function onFile(e) {
@@ -92,19 +95,29 @@ function AddModal({ onClose, onSave, onError }) {
     finally { setBusy(false); }
   }
 
+  async function fetchUrl() {
+    if (!url.trim()) return;
+    onError(null); setBusy(true);
+    try {
+      const { title: t, text, source_url } = await fetchUrlContent(url.trim());
+      setContent(text);
+      setSourceUrl(source_url);
+      if (!title.trim() && t) setTitle(t);
+    } catch (e2) { onError(e2.message); }
+    finally { setBusy(false); }
+  }
+
   function save() {
     if (!title.trim() || !content.trim()) return;
-    onSave(
-      mode === "file" && file
-        ? { title, content, source_type: "file", file_type: file.file_type, file_size: file.file_size }
-        : { title, content, source_type: "text" }
-    );
+    if (mode === "file" && file) onSave({ title, content, source_type: "file", file_type: file.file_type, file_size: file.file_size });
+    else if (mode === "url" && sourceUrl) onSave({ title, content, source_type: "url", file_type: "url", source_url: sourceUrl });
+    else onSave({ title, content, source_type: "text" });
   }
 
   return (
     <Modal title="Add Library Content" onClose={onClose} width={640}>
       <div style={{ display: "inline-flex", gap: 4, padding: 3, background: C.panel, borderRadius: 9, marginBottom: 16 }}>
-        {[["text", "Paste text"], ["file", "Upload file"]].map(([m, label]) => (
+        {[["text", "Paste text"], ["file", "Upload file"], ["url", "From URL"]].map(([m, label]) => (
           <button key={m} onClick={() => setMode(m)} style={{
             fontSize: 12.5, fontWeight: 600, padding: "6px 14px", borderRadius: 7, cursor: "pointer", fontFamily: "inherit", border: "none",
             background: mode === m ? "#fff" : "transparent", color: mode === m ? C.ink : C.muted,
@@ -115,11 +128,13 @@ function AddModal({ onClose, onSave, onError }) {
 
       <Field label="Title"><Input value={title} onChange={(e) => setTitle(e.target.value)} autoFocus placeholder="e.g. Data retention policy" /></Field>
 
-      {mode === "text" ? (
+      {mode === "text" && (
         <Field label="Content">
           <textarea value={content} onChange={(e) => setContent(e.target.value)} style={ta} placeholder="Paste the text you want the AI drafter to ground on…" />
         </Field>
-      ) : (
+      )}
+
+      {mode === "file" && (
         <Field label="File">
           <label style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, fontSize: 13, fontWeight: 600, padding: "22px 16px", borderRadius: 10, cursor: "pointer", background: C.panel, color: C.body, border: `1.5px dashed ${C.cardLine}`, fontFamily: "inherit" }}>
             {busy ? "Reading…" : file ? "Replace file (.pdf, .docx, .txt, .md)" : "Choose a file (.pdf, .docx, .txt, .md)"}
@@ -129,6 +144,23 @@ function AddModal({ onClose, onSave, onError }) {
             <div style={{ fontSize: 12.5, color: "#15803D", background: C.greenSoft, border: "1px solid #BBE7CB", borderRadius: 8, padding: "7px 11px", marginTop: 10 }}>
               Extracted {content.length.toLocaleString()} characters from your {file.file_type.toUpperCase()}{file.file_size ? ` · ${fmtSize(file.file_size)}` : ""}.
             </div>
+          )}
+        </Field>
+      )}
+
+      {mode === "url" && (
+        <Field label="Web page URL">
+          <div style={{ display: "flex", gap: 8 }}>
+            <Input value={url} onChange={(e) => { setUrl(e.target.value); setSourceUrl(null); }} onKeyDown={(e) => e.key === "Enter" && fetchUrl()} placeholder="https://example.com/security-policy" />
+            <Button onClick={fetchUrl} disabled={busy || !url.trim()} style={{ whiteSpace: "nowrap" }}>{busy ? "Fetching…" : "Fetch page"}</Button>
+          </div>
+          {sourceUrl && content && (
+            <>
+              <div style={{ fontSize: 12.5, color: "#15803D", background: C.greenSoft, border: "1px solid #BBE7CB", borderRadius: 8, padding: "7px 11px", marginTop: 10 }}>
+                Extracted {content.length.toLocaleString()} characters from the page. Edit below if needed.
+              </div>
+              <textarea value={content} onChange={(e) => setContent(e.target.value)} style={{ ...ta, marginTop: 10 }} />
+            </>
           )}
         </Field>
       )}
@@ -157,7 +189,8 @@ function EntryRow({ entry, onChanged, onError }) {
     try { await deleteEntry(entry.id); onChanged(); } catch (e) { onError(e.message); }
   }
 
-  const meta = [entry.source_type === "file" ? "File" : "Pasted text", (entry.file_type || "").toUpperCase(), entry.file_size ? fmtSize(entry.file_size) : ""].filter(Boolean).join(" · ");
+  const sourceLabel = { file: "File", url: "From URL" }[entry.source_type] || "Pasted text";
+  const meta = [sourceLabel, entry.source_type === "file" ? (entry.file_type || "").toUpperCase() : "", entry.file_size ? fmtSize(entry.file_size) : ""].filter(Boolean).join(" · ");
 
   return (
     <div style={{ background: "#fff", border: `1px solid ${C.cardLine}`, borderRadius: 14, padding: "16px 18px", marginBottom: 12 }}>

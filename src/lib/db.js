@@ -79,7 +79,7 @@ export async function listDocuments() {
   return unwrap(
     await supabase
       .from("library_documents")
-      .select("id, name, doc_type, file_type, file_size, created_at, category:category_id(name)")
+      .select("id, name, doc_type, file_type, file_size, source_url, created_at, category:category_id(name)")
       .order("created_at", { ascending: false })
       .limit(500)
   );
@@ -270,3 +270,14 @@ export async function deleteProspect(id) { unwrap(await supabase.from("prospects
 
 // ── Profiles (team members, for Settings/assignees) ──────────────────────────
 export async function listProfiles() { return unwrap(await supabase.from("profiles").select("id, full_name, email").order("full_name")); }
+
+// ── App settings (workspace key/value config, e.g. vendor name) ──────────────
+export async function getSetting(key) {
+  try {
+    const data = unwrap(await supabase.from("app_settings").select("value").eq("key", key).maybeSingle());
+    return data?.value ?? null;
+  } catch { return null; } // table not migrated yet
+}
+export async function setSetting(key, value) {
+  return unwrap(await supabase.from("app_settings").upsert({ key, value, updated_at: new Date().toISOString() }).select().single());
+}

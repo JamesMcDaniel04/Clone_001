@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useLocation } from "react-router-dom";
 import { C } from "../../lib/theme.js";
-import { getProject, getProjectEntries, insertProjectEntries, updateProjectEntry, deleteProjectEntry, createEntry, listMergeVariables, updateProject, getLibraryEntries, libraryTextFromEntries, listCategories, getKnowledgeEntries } from "../../lib/db.js";
+import { getProject, getProjectEntries, insertProjectEntries, updateProjectEntry, deleteProjectEntry, createEntry, listMergeVariables, updateProject, getLibraryEntries, libraryTextFromEntries, listCategories, getKnowledgeEntries, getSetting } from "../../lib/db.js";
 import { PageHeader, Button, Spinner, Modal, Field, Input, Select } from "../../components/ui.jsx";
 import Stepper from "../../components/Stepper.jsx";
 import QuestionCard from "../../components/QuestionCard.jsx";
@@ -59,6 +59,8 @@ export default function Project() {
   const [reportBusy, setReportBusy] = useState(false);
   const [draftProgress, setDraftProgress] = useState(null); // { done, total } while batching
   const [filter, setFilter] = useState("all"); // all | gap | review | approved — drives the bucket chips
+  const [rechecking, setRechecking] = useState(false); // re-drafting gaps against the latest library
+  const [vendorName, setVendorName] = useState(""); // org name (Settings) — default vendor in the report
 
   useEffect(() => {
     getProject(id).then(setProject).catch((e) => setErr(e.message));
@@ -66,6 +68,7 @@ export default function Project() {
     listMergeVariables().then(setMergeVars).catch(() => {});
     getLibraryEntries().then(setLibEntries).catch(() => {});
     listCategories().then(setCategories).catch(() => {});
+    getSetting("vendor_name").then((v) => v && setVendorName(v)).catch(() => {});
   }, [id]);
 
   // Derive an answer's category from the question itself, using the same
@@ -138,54 +141,24 @@ export default function Project() {
       // answers — into the matchable pool so drafting grounds on them too.
       const knowledge = await getKnowledgeEntries().catch(() => []);
       const pool = knowledge.length ? [...scoped, ...knowledge] : scoped;
-      // Draft in small batches so each serverless call finishes well under the
-      // hosting timeout. Each batch sends only the matched entries for those
-      // questions, which keeps the Claude prompt small on Vercel.
-      const batches = [];
-      for (let i = 0; i < parsed.length; i += DRAFT_BATCH_SIZE) batches.push(parsed.slice(i, i + DRAFT_BATCH_SIZE));
-      const results = new Array(batches.length);
-      let nextBatch = 0;
-      async function worker() {
-        while (nextBatch < batches.length) {
-          const bi = nextBatch++;
-          results[bi] = await draftBatch(batches[bi], batchLibraryForQuestions(batches[bi], pool));
-          setDraftProgress((p) => ({ done: Math.min((p?.done || 0) + batches[bi].length, parsed.length), total: parsed.length }));
-        }
-      }
-      await Promise.all(Array.from({ length: Math.min(DRAFT_CONCURRENCY, batches.length) }, worker));
-
-      // Build rows per batch so a short/long batch never misaligns later questions.
-      // Use the ORIGINAL question text (keeps checkbox options for the report).
-      const rows = [];
-      let pos = 0;
-      batches.forEach((batchQs, bi) => {
-        const ans = results[bi] || [];
-        batchQs.forEach((qText, j) => {
-          const d = ans[j] || {
-            question_id: `Q${pos + 1}`,
-            question_text: qText,
-            draft_answer: null,
-            classification: "gap",
-            flag: false,
-            flag_type: "None",
-            flag_reason: null,
-            library_entries_used: [],
-          };
-          rows.push({
-            project_id: id,
-            question_id: d.question_id || `Q${pos + 1}`,
-            question: qText,
-            draft_answer: d.draft_answer || null,
-            edited_answer: d.draft_answer || null,
-            status: statusFromDraft(d),
-            flag: !!d.flag,
-            flag_type: d.flag_type || null,
-            flag_reason: d.flag_reason || null,
-            library_entries_used: d.library_entries_used || [],
-            position: pos,
-          });
-          pos++;
-        });
+      const flat = await draftInBatches(parsed, pool);
+      // Build rows in question order. Use the ORIGINAL question text (keeps
+      // checkbox options for the report).
+      const rows = parsed.map((qText, i) => {
+        const d = flat[i] || gapFallback(qText, i);
+        return {
+          project_id: id,
+          question_id: d.question_id || `Q${i + 1}`,
+          question: qText,
+          draft_answer: d.draft_answer || null,
+          edited_answer: d.draft_answer || null,
+          status: statusFromDraft(d),
+          flag: !!d.flag,
+          flag_type: d.flag_type || null,
+          flag_reason: d.flag_reason || null,
+          library_entries_used: d.library_entries_used || [],
+          position: i,
+        };
       });
       const saved = await insertProjectEntries(rows);
       setEntries(saved);
@@ -197,6 +170,79 @@ export default function Project() {
       setPhase("idle");
       setDraftProgress(null);
     }
+  }
+
+  // Re-draft the still-open gaps against the LATEST library + knowledge (e.g. after
+  // uploading docs or adding library content that now covers them). Questions that
+  // now ground cleanly are reclassified and leave the Gaps bucket; the rest stay.
+  async function recheckGaps() {
+    const gapRows = (entries || []).filter((q) => q.id && bucketOf(q) === "gap");
+    if (!gapRows.length || rechecking) return;
+    setErr(null);
+    setRechecking(true);
+    setDraftProgress({ done: 0, total: gapRows.length });
+    try {
+      const [freshLib, knowledge] = await Promise.all([
+        getLibraryEntries().catch(() => libEntries),
+        getKnowledgeEntries().catch(() => []),
+      ]);
+      setLibEntries(freshLib);
+      const flat = await draftInBatches(gapRows.map((q) => q.question), [...freshLib, ...knowledge]);
+      let resolved = 0;
+      await Promise.all(gapRows.map(async (row, i) => {
+        const d = flat[i];
+        if (!d) return;
+        const status = statusFromDraft(d);
+        if (status !== "gap") resolved++;
+        await updateProjectEntry(row.id, {
+          draft_answer: d.draft_answer ?? row.draft_answer,
+          edited_answer: d.draft_answer ?? row.edited_answer,
+          status,
+          flag: !!d.flag,
+          flag_type: d.flag_type || null,
+          flag_reason: d.flag_reason || null,
+          library_entries_used: d.library_entries_used || [],
+        });
+      }));
+      setEntries(await getProjectEntries(id));
+      setExportMsg(resolved
+        ? `Re-checked ${gapRows.length} gap${gapRows.length === 1 ? "" : "s"} — ${resolved} now answered and moved out of Gaps.`
+        : `Re-checked ${gapRows.length} gap${gapRows.length === 1 ? "" : "s"} — still no library match. Add an answer or library content to close them.`);
+      setTimeout(() => setExportMsg(null), 4500);
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setRechecking(false);
+      setDraftProgress(null);
+    }
+  }
+
+  function gapFallback(qText, i) {
+    return { question_id: `Q${i + 1}`, question_text: qText, draft_answer: null, classification: "gap", flag: false, flag_type: "None", flag_reason: null, library_entries_used: [] };
+  }
+
+  // Draft a list of questions in concurrent batches against a matchable pool,
+  // returning the answers flat in question order (null where a batch dropped one).
+  // Shared by the initial draft and the gap re-check.
+  async function draftInBatches(parsed, pool) {
+    const batches = [];
+    for (let i = 0; i < parsed.length; i += DRAFT_BATCH_SIZE) batches.push(parsed.slice(i, i + DRAFT_BATCH_SIZE));
+    const results = new Array(batches.length);
+    let nextBatch = 0;
+    async function worker() {
+      while (nextBatch < batches.length) {
+        const bi = nextBatch++;
+        results[bi] = await draftBatch(batches[bi], batchLibraryForQuestions(batches[bi], pool));
+        setDraftProgress((p) => ({ done: Math.min((p?.done || 0) + batches[bi].length, parsed.length), total: parsed.length }));
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(DRAFT_CONCURRENCY, batches.length) }, worker));
+    const flat = [];
+    batches.forEach((batchQs, bi) => {
+      const ans = results[bi] || [];
+      batchQs.forEach((_q, j) => flat.push(ans[j] || null));
+    });
+    return flat;
   }
 
   function batchLibraryForQuestions(questions, scopedEntries) {
@@ -435,7 +481,7 @@ export default function Project() {
   const approvedItems = withIdx.filter(({ q }) => bucketOf(q) === "approved");
   const cleanPendingApproval = reviewItems.filter(({ q }) => !needsAttention(q) && q.status !== "approved" && q.draft_answer).length;
   const BUCKETS = {
-    gap: { items: gapItems, title: "Gaps", mode: "attention", hint: "Questions with no answer in your library yet — add these to the library to close the gap." },
+    gap: { items: gapItems, title: "Gaps", mode: "attention", hint: "Questions with no answer in your library yet. Answer one directly, or add it to the library and use “Re-check gaps” — resolved gaps drop off automatically." },
     review: { items: reviewItems, title: "Needs review", mode: "attention", hint: "Drafted, but flagged for legal, engineering, or a known limitation — validate before sending." },
     approved: { items: approvedItems, title: "Approved", mode: "compact", hint: "Clean, library-backed answers and manually approved items." },
   };
@@ -546,7 +592,14 @@ export default function Project() {
             <FilterChip label="Gaps" count={gapItems.length} tone="red" active={filter === "gap"} onClick={() => setFilter(filter === "gap" ? "all" : "gap")} />
             <FilterChip label="Needs review" count={reviewItems.length} tone="tan" active={filter === "review"} onClick={() => setFilter(filter === "review" ? "all" : "review")} />
             <FilterChip label="Approved" count={approvedItems.length} tone="green" active={filter === "approved"} onClick={() => setFilter(filter === "approved" ? "all" : "approved")} />
-            {cleanPendingApproval > 0 && <Button variant="primary" onClick={approveCleanAnswers} style={{ marginLeft: "auto" }}>Approve {cleanPendingApproval} clean</Button>}
+            <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+              {gapItems.length > 0 && (
+                <Button onClick={recheckGaps} disabled={rechecking} title="Re-draft the open gaps against the latest library & uploaded knowledge docs.">
+                  {rechecking ? "Re-checking gaps…" : `Re-check ${gapItems.length} gap${gapItems.length === 1 ? "" : "s"}`}
+                </Button>
+              )}
+              {cleanPendingApproval > 0 && <Button variant="primary" onClick={approveCleanAnswers}>Approve {cleanPendingApproval} clean</Button>}
+            </div>
           </div>
 
           {filter === "all" ? (
@@ -582,14 +635,14 @@ export default function Project() {
       )}
 
       {reportOpen && (
-        <ReportModal busy={reportBusy} onClose={() => setReportOpen(false)} onGenerate={generateReport} />
+        <ReportModal busy={reportBusy} defaultVendor={vendorName} onClose={() => setReportOpen(false)} onGenerate={generateReport} />
       )}
     </div>
   );
 }
 
-function ReportModal({ busy, onClose, onGenerate }) {
-  const [vendor, setVendor] = useState("People.ai, Inc.");
+function ReportModal({ busy, defaultVendor, onClose, onGenerate }) {
+  const [vendor, setVendor] = useState(defaultVendor || "People.ai, Inc.");
   const [preparedBy, setPreparedBy] = useState("");
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   return (

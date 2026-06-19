@@ -72,6 +72,26 @@ export async function readTextFile(file) {
   return await file.text();
 }
 
+// ── Web pages ───────────────────────────────────────────────────────────────
+// Fetch + parse a public URL server-side (browser CORS blocks a direct fetch),
+// returning { title, text, source_url }. Throws with a readable message on failure.
+export async function fetchUrlContent(url) {
+  let res;
+  try {
+    res = await fetch("/api/fetch-url", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url }),
+    });
+  } catch (e) {
+    throw new Error(`Could not reach the import service: ${e.message}`);
+  }
+  let data = null;
+  try { data = await res.json(); } catch { /* non-JSON error body */ }
+  if (!res.ok) throw new Error(data?.error || `Importing the URL failed (HTTP ${res.status}).`);
+  return data;
+}
+
 // Split free text into candidate questions: one per line / numbered item.
 export function splitQuestions(text) {
   return (text || "")

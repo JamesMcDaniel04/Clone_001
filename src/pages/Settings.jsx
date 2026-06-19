@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { C } from "../lib/theme.js";
-import { listProspects, createProspect, updateProspect, deleteProspect } from "../lib/db.js";
+import { listProspects, createProspect, updateProspect, deleteProspect, getSetting, setSetting } from "../lib/db.js";
 import { PageHeader, Card, Button, Spinner, Input, Modal, Field } from "../components/ui.jsx";
 
 export default function Settings() {
@@ -9,11 +9,25 @@ export default function Settings() {
   const [name, setName] = useState("");
   const [editingProspect, setEditingProspect] = useState(null);
   const [pErr, setPErr] = useState(null);
+  const [vendor, setVendor] = useState("");
+  const [vendorSaved, setVendorSaved] = useState(false);
+  const [vendorErr, setVendorErr] = useState(null);
 
   function loadProspects() {
     listProspects().then(setProspects).catch((e) => { setProspects([]); setPErr(e.message); });
   }
-  useEffect(() => { loadProspects(); }, []);
+  useEffect(() => {
+    loadProspects();
+    getSetting("vendor_name").then((v) => setVendor(v || "")).catch(() => {});
+  }, []);
+
+  async function saveVendor() {
+    try {
+      await setSetting("vendor_name", vendor.trim());
+      setVendorErr(null); setVendorSaved(true);
+      setTimeout(() => setVendorSaved(false), 2500);
+    } catch (e) { setVendorErr(e.message); }
+  }
 
   async function add() {
     if (!name.trim()) return;
@@ -38,6 +52,18 @@ export default function Settings() {
             <div style={{ fontSize: 14, fontWeight: 600, color: C.ink }}>Shared workspace</div>
             <div style={{ fontSize: 12.5, color: C.muted }}>Everyone using this deployment sees the same projects, reviews, and answer library.</div>
           </div>
+        </Card>
+      </Section>
+
+      <Section title="Vendor / your organization">
+        <Card style={{ padding: "16px 18px" }}>
+          <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 12 }}>Your organization's name. Pre-fills the review-draft report header and is used wherever the vendor is referenced.</div>
+          <div style={{ display: "flex", gap: 8, maxWidth: 460 }}>
+            <Input value={vendor} onChange={(e) => setVendor(e.target.value)} placeholder="e.g. People.ai, Inc. d/b/a Backstory" onKeyDown={(e) => e.key === "Enter" && saveVendor()} />
+            <Button variant="primary" onClick={saveVendor} style={{ whiteSpace: "nowrap" }}>Save</Button>
+          </div>
+          {vendorSaved && <div style={{ color: "#15803D", fontSize: 12.5, marginTop: 10 }}>Saved.</div>}
+          {vendorErr && <div style={{ color: C.red, fontSize: 12.5, marginTop: 10 }}>{vendorErr.includes("app_settings") || vendorErr.includes("relation") ? "Settings table not found — run supabase/migrations/0007_app_settings.sql, then refresh." : vendorErr}</div>}
         </Card>
       </Section>
 
