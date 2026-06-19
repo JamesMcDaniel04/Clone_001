@@ -1,3 +1,4 @@
+import { Navigate } from "react-router-dom";
 import { useSession } from "./SessionProvider.jsx";
 import { isSupabaseConfigured } from "../lib/supabaseClient.js";
 import { C, font } from "../lib/theme.js";
@@ -11,7 +12,7 @@ function Centered({ children }) {
 }
 
 export default function RequireAuth({ children }) {
-  const { user, loading, anonError } = useSession();
+  const { user, loading } = useSession();
 
   if (!isSupabaseConfigured) {
     return (
@@ -30,23 +31,11 @@ export default function RequireAuth({ children }) {
     );
   }
 
-  if (anonError) {
-    return (
-      <Centered>
-        <div style={{ fontSize: 18, fontWeight: 650, color: C.ink, marginBottom: 10 }}>Enable anonymous sign-ins</div>
-        <div style={{ fontSize: 14, color: C.body, lineHeight: 1.6 }}>
-          This shared workspace uses anonymous Supabase sessions instead of a login screen. Enable it in{" "}
-          <strong>Supabase → Authentication → Sign In / Providers → Anonymous Sign-Ins</strong>{" "}
-          (toggle on, Save), then refresh this page.
-          <div style={{ marginTop: 10, fontSize: 12, color: C.muted }}>Supabase said: {anonError}</div>
-        </div>
-      </Centered>
-    );
+  if (loading) {
+    return <Centered><div style={{ fontSize: 14, color: C.muted, textAlign: "center" }}>Loading…</div></Centered>;
   }
 
-  if (loading || !user) {
-    return <Centered><div style={{ fontSize: 14, color: C.muted, textAlign: "center" }}>Starting shared workspace...</div></Centered>;
-  }
+  if (!user) return <Navigate to="/login" replace />;
 
   return children;
 }

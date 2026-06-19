@@ -12,18 +12,25 @@ From an empty machine to a live shared workspace. The app needs three services: 
 
 ---
 
-## 1. Supabase — database + anonymous sessions
+## 1. Supabase — database + email/password sign-in
 
 1. Create a new Supabase project. Note the **Project URL** and the **anon** and **service_role**
    keys (Project Settings → API).
 2. Open the **SQL Editor** and run, in order:
    - `supabase/migrations/0001_init.sql` (schema + Row-Level Security)
-   - `supabase/migrations/0002_prospects.sql` (prospects/clients table)
+   - `supabase/migrations/0002_prospects.sql` … through the latest numbered migration in
+     `supabase/migrations/` (each adds a feature; run any you haven't yet).
    - `supabase/seed.sql` (categories + starter InfoSec library so the app isn't empty)
    *(or `supabase db push` + `supabase db reset` if you use the Supabase CLI.)*
-3. **Authentication → Sign In / Providers → Anonymous Sign-Ins:** enable anonymous sign-ins.
-   The app creates an anonymous Supabase session automatically so RLS policies still apply
-   without showing a login screen.
+3. **Authentication → Sign In / Providers → Email:** enable the Email provider and turn
+   **Confirm email** ON. Leave **Anonymous Sign-Ins** OFF — the app now requires a real login.
+4. **Authentication → Email Templates → Confirm signup:** include the one-time code in the
+   template so users get a 6-digit code (not just a magic link), e.g. add a line:
+   `Your code is {{ .Token }}`. The app verifies this code on the confirm-email screen.
+5. Sign-up is restricted to **backstory.ai** and **people.ai** addresses. This is enforced in the
+   browser (friendly message) and at the database level by the trigger in
+   `supabase/migrations/0009_email_domain.sql` — make sure that migration ran. To change the
+   allowed domains, edit that trigger and `ALLOWED_DOMAINS` in `src/pages/Login.jsx`.
 
 ---
 
@@ -79,9 +86,14 @@ Add every variable from step 2 in **Vercel → Project → Settings → Environm
 
 ## 5. Restrict access to your team
 
-This app does not show a login screen. Anyone who can load the deployed URL can create an anonymous
-session and read/write the shared workspace. Use **Vercel Deployment Protection** or another outer
-gate if the deployment should only be available to two or three people.
+The app requires email/password sign-in, restricted to **backstory.ai** and **people.ai** addresses,
+with an email confirmation code (see step 1.3–1.5). New users sign up, receive a 6-digit code, and
+verify it before they can enter. The data behind the login is still a single shared workspace —
+everyone who signs in sees the same projects, reviews, and library.
+
+Note: the `/api/*` serverless endpoints (drafting, report, URL import) are not auth-gated themselves;
+they hold no data and rely on the server-side `ANTHROPIC_API_KEY`. Add **Vercel Deployment Protection**
+if you also want to gate those at the network edge.
 
 ---
 

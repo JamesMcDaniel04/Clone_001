@@ -93,8 +93,8 @@ export default function Settings() {
 
       <Section title="Configuration">
         <Card style={{ padding: "8px 6px" }}>
-          <Row label="Access mode" value="Shared anonymous sessions" />
-          <Row label="Login screen" value="Disabled" />
+          <Row label="Access mode" value="Email + password · backstory.ai / people.ai only" />
+          <Row label="Login screen" value="Enabled (email confirmation code)" />
           <Row label="Drafting model" value="Set server-side via ANTHROPIC_MODEL (default claude-opus-4-8)" last />
         </Card>
       </Section>

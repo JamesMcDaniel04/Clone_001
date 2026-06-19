@@ -45,7 +45,7 @@ function NavMenu({ label, to, items }) {
 }
 
 export default function TopNav() {
-  const { user } = useSession();
+  const { user, signOut } = useSession();
   const { open, setOpen, ref } = useDropdown();
   const u = userDisplay(user);
 
@@ -89,6 +89,7 @@ export default function TopNav() {
                 <div style={{ padding: "8px 12px", fontSize: 12, color: C.muted, borderBottom: `1px solid ${C.line}`, marginBottom: 4 }}>{u.email || u.name}</div>
                 <Link to="/settings" onClick={() => setOpen(false)} style={{ display: "block", padding: "8px 12px", borderRadius: 7, fontSize: 13, color: C.body, textDecoration: "none" }}>Settings</Link>
                 <Link to="/setup" onClick={() => setOpen(false)} style={{ display: "block", padding: "8px 12px", borderRadius: 7, fontSize: 13, color: C.body, textDecoration: "none" }}>Setup wizard</Link>
+                <button onClick={() => { setOpen(false); signOut(); }} style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 12px", borderRadius: 7, fontSize: 13, color: C.red, background: "transparent", border: "none", cursor: "pointer", fontFamily: "inherit", borderTop: `1px solid ${C.line}`, marginTop: 4 }}>Sign out</button>
               </div>
             )}
           </div>
