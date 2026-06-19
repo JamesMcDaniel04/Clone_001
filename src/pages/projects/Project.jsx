@@ -22,12 +22,16 @@ function parseQuestions(raw) {
   // Otherwise treat each substantial line as a question.
   return lines.map((l) => l.replace(/^\d+[.)]\s*/, "").trim()).filter((l) => l.length > 10);
 }
+// Claude classifies each answer into one of three review buckets; persist that as
+// the entry status. Fall back to the flag fields for older API responses that
+// predate the classification field.
 function statusFromDraft(d) {
+  if (d.classification === "approved" || d.classification === "needs_review" || d.classification === "gap") {
+    return d.classification;
+  }
   if (!d.flag) return "approved";
-  if (d.flag_type === "Needs engineering") return "needs_engineering";
-  // No-match answers are best-effort drafts to validate (only "withheld" when truly blank).
-  if (d.flag_type === "No library match") return d.draft_answer ? "needs_legal" : "withheld";
-  return "needs_legal";
+  if (d.flag_type === "No library match") return "gap";
+  return "needs_review";
 }
 
 const DRAFT_BATCH_SIZE = 6;   // questions per serverless call (≤ server's MAX_QUESTIONS_PER_REQUEST)
@@ -54,6 +58,7 @@ export default function Project() {
   const [reportOpen, setReportOpen] = useState(false);
   const [reportBusy, setReportBusy] = useState(false);
   const [draftProgress, setDraftProgress] = useState(null); // { done, total } while batching
+  const [filter, setFilter] = useState("all"); // all | gap | review | approved — drives the bucket chips
 
   useEffect(() => {
     getProject(id).then(setProject).catch((e) => setErr(e.message));
@@ -160,6 +165,7 @@ export default function Project() {
             question_id: `Q${pos + 1}`,
             question_text: qText,
             draft_answer: null,
+            classification: "gap",
             flag: true,
             flag_type: "No library match",
             flag_reason: "No answer was returned for this question.",
@@ -306,7 +312,15 @@ export default function Project() {
   }
 
   function needsAttention(q) {
-    return q.status !== "approved" && (!!q.flag || !q.draft_answer || ["needs_legal", "needs_engineering", "withheld"].includes(q.status));
+    return q.status !== "approved" && (!!q.flag || !q.draft_answer || ["needs_review", "gap", "needs_legal", "needs_engineering", "withheld"].includes(q.status));
+  }
+
+  // Which review bucket a question falls in. Driven by Claude's persisted
+  // classification (status), with a fallback for entries that have no answer at all.
+  function bucketOf(q) {
+    if (q.status === "approved") return "approved";
+    if (q.status === "gap" || q.status === "withheld" || !(q.draft_answer || q.edited_answer)) return "gap";
+    return "review"; // needs_review, needs_legal/engineering (legacy), edited, draft
   }
 
   async function approveCleanAnswers() {
@@ -412,11 +426,22 @@ export default function Project() {
   if (!project || entries == null) return <Spinner />;
 
   const hasEntries = entries.length > 0;
-  const approved = entries.filter((q) => q.status === "approved").length;
-  const flagged = entries.filter((q) => q.flag).length;
-  const attentionItems = entries.map((q, i) => ({ q, i })).filter(({ q }) => needsAttention(q));
-  const cleanItems = entries.map((q, i) => ({ q, i })).filter(({ q }) => !needsAttention(q));
-  const cleanPendingApproval = cleanItems.filter(({ q }) => q.status !== "approved" && q.draft_answer).length;
+  // Three buckets the review summary filters by. A "gap" is a question we don't
+  // have an answer to yet — the drafter found no library match (or withheld it).
+  // Everything else that isn't approved needs review.
+  const withIdx = entries.map((q, i) => ({ q, i }));
+  const gapItems = withIdx.filter(({ q }) => bucketOf(q) === "gap");
+  const reviewItems = withIdx.filter(({ q }) => bucketOf(q) === "review");
+  const approvedItems = withIdx.filter(({ q }) => bucketOf(q) === "approved");
+  const cleanPendingApproval = reviewItems.filter(({ q }) => !needsAttention(q) && q.status !== "approved" && q.draft_answer).length;
+  const BUCKETS = {
+    gap: { items: gapItems, title: "Gaps", mode: "attention", hint: "Questions with no answer in your library yet — add these to the library to close the gap." },
+    review: { items: reviewItems, title: "Needs review", mode: "attention", hint: "Drafted, but flagged for legal, engineering, or a known limitation — validate before sending." },
+    approved: { items: approvedItems, title: "Approved", mode: "compact", hint: "Clean, library-backed answers and manually approved items." },
+  };
+  const card = ({ q, i }, mode) => (
+    <QuestionCard key={q.id || i} q={q} idx={i} prospect={project.prospect} category={categoryForEntry(q)} libraryLabel={libraryLabel} resolve={resolveMV} onStatusChange={handleStatusChange} onAnswerEdit={handleAnswerEdit} onPromote={handlePromote} onDelete={removeProjectEntry} attention={mode === "attention"} compact={mode === "compact"} />
+  );
 
   if (project.is_template) {
     return (
@@ -461,8 +486,8 @@ export default function Project() {
           {matches.map((m, i) => (
             <div key={m.question + i} style={{ border: `1px solid ${C.cardLine}`, borderRadius: 16, padding: "18px 20px", marginBottom: 14, background: "#fff" }}>
               <div style={{ fontSize: 12, color: C.muted, marginBottom: 6 }}>Question — {project.prospect || "—"} · Q{i + 1}</div>
-              <div style={{ fontSize: 15.5, color: C.ink, fontWeight: 550, lineHeight: 1.45, marginBottom: m.entries.length ? 14 : 0 }}>{m.question}</div>
-              {m.entries.length > 0 && (
+              <div style={{ fontSize: 15.5, color: C.ink, fontWeight: 550, lineHeight: 1.45, marginBottom: 14 }}>{m.question}</div>
+              {m.entries.length > 0 ? (
                 <>
                   <div style={{ fontSize: 12, color: C.muted, marginBottom: 8 }}>Library matches</div>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -474,6 +499,10 @@ export default function Project() {
                   </div>
                   <div style={{ fontSize: 12.5, color: C.faint, marginTop: 10 }}>{m.entries.length} relevant {m.entries.length === 1 ? "entry" : "entries"} found · drafting now…</div>
                 </>
+              ) : (
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6, background: C.redSoft, color: C.red, border: "1px solid #F1D9D6", borderRadius: 8, padding: "4px 10px", fontSize: 12, fontWeight: 600 }}>
+                  Potential gap — no library match found yet
+                </span>
               )}
             </div>
           ))}
@@ -512,33 +541,33 @@ export default function Project() {
       ) : (
         <div>
           <Stepper statuses={["complete", "complete", "complete", "active"]} />
-          <div style={{ display: "flex", gap: 10, marginBottom: 18, flexWrap: "wrap" }}>
-            <Stat label="Total" value={entries.length} />
-            <Stat label="Needs attention" value={attentionItems.length} tone={attentionItems.length ? "tan" : "green"} />
-            <Stat label="Approved" value={approved} tone="green" />
-            <Stat label="Flagged" value={flagged} tone="tan" />
-            {cleanPendingApproval > 0 && <Button variant="primary" onClick={approveCleanAnswers}>Approve {cleanPendingApproval} clean</Button>}
+          <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap", alignItems: "center" }}>
+            <FilterChip label="All" count={entries.length} tone="default" active={filter === "all"} onClick={() => setFilter("all")} />
+            <FilterChip label="Gaps" count={gapItems.length} tone="red" active={filter === "gap"} onClick={() => setFilter(filter === "gap" ? "all" : "gap")} />
+            <FilterChip label="Needs review" count={reviewItems.length} tone="tan" active={filter === "review"} onClick={() => setFilter(filter === "review" ? "all" : "review")} />
+            <FilterChip label="Approved" count={approvedItems.length} tone="green" active={filter === "approved"} onClick={() => setFilter(filter === "approved" ? "all" : "approved")} />
+            {cleanPendingApproval > 0 && <Button variant="primary" onClick={approveCleanAnswers} style={{ marginLeft: "auto" }}>Approve {cleanPendingApproval} clean</Button>}
           </div>
 
-          {attentionItems.length > 0 ? (
-            <ReviewGroup title="Needs attention" hint="Claude flagged these for legal, engineering, no-match, or missing-answer review.">
-              {attentionItems.map(({ q, i }) => (
-                <QuestionCard key={q.id || i} q={q} idx={i} prospect={project.prospect} category={categoryForEntry(q)} libraryLabel={libraryLabel} resolve={resolveMV} onStatusChange={handleStatusChange} onAnswerEdit={handleAnswerEdit} onPromote={handlePromote} onDelete={removeProjectEntry} attention />
-              ))}
-            </ReviewGroup>
+          {filter === "all" ? (
+            ["gap", "review", "approved"].map((key) => {
+              const b = BUCKETS[key];
+              if (key !== "approved" && b.items.length === 0) return null;
+              return (
+                <ReviewGroup key={key} title={`${b.title} (${b.items.length})`} hint={b.hint}>
+                  {b.items.length === 0
+                    ? <div style={{ fontSize: 13, color: C.muted, padding: "10px 0" }}>Nothing here yet.</div>
+                    : b.items.map((it) => card(it, b.mode))}
+                </ReviewGroup>
+              );
+            })
           ) : (
-            <div style={{ background: C.greenSoft, border: "1px solid #BBE7CB", color: "#15803D", borderRadius: 12, padding: "12px 14px", fontSize: 13, fontWeight: 600, marginBottom: 16 }}>
-              No answers need attention. Clean answers were approved automatically.
-            </div>
+            <ReviewGroup title={`${BUCKETS[filter].title} (${BUCKETS[filter].items.length})`} hint={BUCKETS[filter].hint}>
+              {BUCKETS[filter].items.length === 0
+                ? <div style={{ fontSize: 13, color: C.muted, padding: "10px 0" }}>No {BUCKETS[filter].title.toLowerCase()} right now.</div>
+                : BUCKETS[filter].items.map((it) => card(it, BUCKETS[filter].mode))}
+            </ReviewGroup>
           )}
-
-          <ReviewGroup title="Approved / resolved answers" hint="Clean answers are approved automatically. Manually approved attention items move here after review.">
-            {cleanItems.length === 0 ? (
-              <div style={{ fontSize: 13, color: C.muted, padding: "10px 0" }}>No clean answers yet.</div>
-            ) : cleanItems.map(({ q, i }) => (
-              <QuestionCard key={q.id || i} q={q} idx={i} prospect={project.prospect} category={categoryForEntry(q)} libraryLabel={libraryLabel} resolve={resolveMV} onStatusChange={handleStatusChange} onAnswerEdit={handleAnswerEdit} onPromote={handlePromote} onDelete={removeProjectEntry} compact />
-            ))}
-          </ReviewGroup>
         </div>
       )}
 
@@ -624,18 +653,27 @@ function DraftProgress({ prospect, done, total }) {
   );
 }
 
-function Stat({ label, value, tone }) {
-  const styles = {
-    default: { background: C.panel, border: `1px solid ${C.line}`, color: C.muted },
-    green: { background: C.greenSoft, border: "1px solid #BBE7CB", color: "#15803D" },
-    tan: { background: C.tan, border: `1px solid ${C.tanLine}`, color: C.tanInk },
+// A clickable bucket chip that doubles as a filter (Gaps / Needs review /
+// Approved). Active state inverts to a solid fill so the current filter is obvious.
+function FilterChip({ label, count, tone, active, onClick }) {
+  const tones = {
+    default: { bg: C.panel, line: C.line, color: C.body, solid: C.ink },
+    red: { bg: C.redSoft, line: "#F1D9D6", color: C.red, solid: C.red },
+    tan: { bg: C.tan, line: C.tanLine, color: C.tanInk, solid: C.tanInk },
+    green: { bg: C.greenSoft, line: "#BBE7CB", color: "#15803D", solid: C.green },
   };
-  const s = styles[tone] || styles.default;
+  const t = tones[tone] || tones.default;
   return (
-    <div style={{ background: s.background, border: s.border, borderRadius: 10, padding: "9px 15px", fontSize: 13 }}>
-      <span style={{ color: s.color }}>{label} </span>
-      <strong style={{ color: tone ? s.color : C.ink }}>{value}</strong>
-    </div>
+    <button
+      onClick={onClick}
+      style={{
+        display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 14px", borderRadius: 10, cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: 600,
+        border: `1px solid ${active ? t.solid : t.line}`, background: active ? t.solid : t.bg, color: active ? "#fff" : t.color, transition: "background .15s, color .15s, border-color .15s",
+      }}
+    >
+      {label}
+      <span style={{ fontSize: 12, fontWeight: 700, minWidth: 18, textAlign: "center", padding: "1px 7px", borderRadius: 999, background: active ? "rgba(255,255,255,0.22)" : "#fff", color: active ? "#fff" : t.color, border: active ? "none" : `1px solid ${t.line}` }}>{count}</span>
+    </button>
   );
 }
 

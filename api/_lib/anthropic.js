@@ -20,11 +20,18 @@ Rules:
 7. Preserve merge-variable placeholders. If a library entry contains a placeholder in [[double brackets]] (e.g. [[Client Name]]), keep it verbatim in your answer — it is filled in per project when the answer is used.
 8. Do not use Oliver Williams personal/direct chat input as a source. If a source section says it excludes Oliver personal input, respect that exclusion.
 
+9. Classify every answer into exactly one review bucket via "classification":
+   - "approved": the answer is fully grounded in the answer library or supplemental knowledge sources, has no limitation or caveat, and needs no human sign-off — safe to send as-is.
+   - "needs_review": you produced a grounded answer, but a human should validate it before sending — it touches a known limitation (FedRAMP, single-tenant / private cloud, EMEA / non-US hosting, ITAR, IL4/IL5, CMMC…), needs legal or engineering sign-off, or rests on partial / weak grounding.
+   - "gap": the provided knowledge does NOT actually answer this question — we have no real answer on file yet. Give a conservative best-effort answer if you can, but classify it "gap" so the team knows to add it to the library. A question with an empty "library_entries_used" is almost always a gap.
+   Keep "classification" consistent with "flag": set flag to false only when classification is "approved"; set flag to true for "needs_review" and "gap".
+
 For each question return:
 - question_id: the question's id (e.g. "Q1"), echoing the input numbering.
 - question_text: the original question text.
-- draft_answer: the drafted answer, or null if there is no library match.
-- flag: true if the answer needs human sign-off (known gap, legal, engineering, or no match).
+- draft_answer: the drafted answer, or null if there is genuinely nothing to say.
+- classification: one of "approved", "needs_review", or "gap" (see rule 9).
+- flag: true unless classification is "approved".
 - flag_reason: a one-sentence explanation when flag is true, otherwise null.
 - flag_type: one of "Needs legal", "Needs engineering", "Compliance gap", "Known gap", "No library match", or "None" when flag is false.
 - library_entries_used: the exact names of the library entries the answer drew on.`;
@@ -44,6 +51,7 @@ const ANSWER_SCHEMA = {
           question_id: { type: "string" },
           question_text: { type: "string" },
           draft_answer: { type: ["string", "null"] },
+          classification: { type: "string", enum: ["approved", "needs_review", "gap"] },
           flag: { type: "boolean" },
           flag_reason: { type: ["string", "null"] },
           flag_type: {
@@ -56,6 +64,7 @@ const ANSWER_SCHEMA = {
           "question_id",
           "question_text",
           "draft_answer",
+          "classification",
           "flag",
           "flag_reason",
           "flag_type",

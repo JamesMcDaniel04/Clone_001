@@ -223,6 +223,21 @@ export async function listProjectReviews({ projectId, search } = {}) {
   return unwrap(await q);
 }
 
+// Open gaps across all projects: questions Claude classified as a "gap" — no real
+// answer in the library yet (legacy 'withheld' rows included). Powers the Home
+// "Gaps" section so the team can see what knowledge is missing.
+export async function listGapEntries({ limit = 50 } = {}) {
+  const data = unwrap(
+    await supabase
+      .from("project_entries")
+      .select("id, question, status, flag_type, flag_reason, project_id, project:project_id(name, prospect), updated_at")
+      .in("status", ["gap", "withheld"])
+      .order("updated_at", { ascending: false })
+      .limit(limit)
+  );
+  return data || [];
+}
+
 // Find an existing library entry whose title matches (case-insensitive, exact).
 export async function findLibraryEntryByTitle(title) {
   const data = unwrap(await supabase.from("library_entries").select("id, title").ilike("title", title).limit(1));

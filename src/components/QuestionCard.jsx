@@ -16,14 +16,20 @@ export default function QuestionCard({ q, idx, prospect, category, libraryLabel,
   const shownAnswer = resolve ? resolve(rawAnswer) : rawAnswer;
   const mvApplied = shownAnswer !== rawAnswer;
 
+  // Claude classifies answers into the three review buckets (approved /
+  // needs_review / gap); draft & edited are manual states. Legacy needs_legal /
+  // needs_engineering / withheld still render for any pre-migration rows.
   const statusColors = {
     draft: "#F3F4F2", edited: "#EAF1FB", approved: C.greenSoft,
+    needs_review: C.tan, gap: "#FCE8E6",
     needs_legal: C.tan, needs_engineering: "#EDE9FE", withheld: "#FCE8E6",
   };
   const statusLabels = {
     draft: "Draft", edited: "Edited", approved: "Approved",
+    needs_review: "Needs review", gap: "Gap",
     needs_legal: "Needs legal", needs_engineering: "Needs engineering", withheld: "Withheld",
   };
+  const STATUS_OPTIONS = ["draft", "edited", "approved", "needs_review", "gap"];
   const btn = { fontSize: 12, padding: "5px 12px", borderRadius: 8, border: `1px solid ${C.line}`, cursor: "pointer", background: "#fff", color: C.body, fontFamily: "inherit" };
 
   if (compact && !expanded) {
@@ -94,7 +100,7 @@ export default function QuestionCard({ q, idx, prospect, category, libraryLabel,
         )
       ) : (
         <div style={{ border: "1px solid #F1D9D6", borderRadius: 12, padding: "14px 16px", background: "#FDF4F3", fontSize: 13.5, color: "#B4453B", fontStyle: "italic" }}>
-          No library match — answer withheld. Flag for manual input.
+          Gap — no answer in the library yet. Add one to close it, or edit a manual answer here.
         </div>
       )}
 
@@ -107,7 +113,7 @@ export default function QuestionCard({ q, idx, prospect, category, libraryLabel,
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 16, paddingTop: 14, borderTop: `1px solid ${C.line}` }}>
         <span style={{ fontSize: 12, color: C.muted }}>Status</span>
         <select value={q.status || "draft"} onChange={(e) => onStatusChange(idx, e.target.value)} style={{ fontSize: 12, padding: "5px 10px", borderRadius: 8, border: `1px solid ${C.line}`, background: statusColors[q.status] || "#F3F4F2", cursor: "pointer", color: C.ink, fontWeight: 500, fontFamily: "inherit" }}>
-          {Object.keys(statusLabels).map((s) => <option key={s} value={s}>{statusLabels[s]}</option>)}
+          {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{statusLabels[s]}</option>)}
         </select>
         <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
           {compact && <button onClick={() => setExpanded(false)} style={btn}>Collapse</button>}

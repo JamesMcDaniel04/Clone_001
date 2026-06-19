@@ -1,18 +1,20 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { C } from "../lib/theme.js";
-import { listProjects } from "../lib/db.js";
+import { listProjects, listGapEntries } from "../lib/db.js";
 import { Card, Button, Spinner, Empty } from "../components/ui.jsx";
 
 export default function Home() {
   const nav = useNavigate();
   const [projects, setProjects] = useState(null);
+  const [gaps, setGaps] = useState(null);
   const [err, setErr] = useState(null);
 
   useEffect(() => {
     listProjects()
       .then(setProjects)
       .catch((e) => setErr(e.message));
+    listGapEntries().then(setGaps).catch(() => setGaps([]));
   }, []);
 
   return (
@@ -41,6 +43,22 @@ export default function Home() {
                 <div style={{ fontSize: 12, color: C.muted }}>{p.prospect || "—"} · {p.entries?.[0]?.count ?? 0} questions</div>
               </div>
               <StatusTag status={p.status} />
+            </Row>
+          ))
+        )}
+      </Section>
+
+      <Section title="Gaps — questions with no answer yet">
+        {gaps == null ? <Spinner /> : gaps.length === 0 ? (
+          <Empty title="No open gaps." hint="When the drafter can't ground a question in your library, it shows up here so you can add the missing answer." />
+        ) : (
+          gaps.slice(0, 8).map((g) => (
+            <Row key={g.id} onClick={() => nav(`/projects/${g.project_id}`)}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: C.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.question}</div>
+                <div style={{ fontSize: 12, color: C.muted }}>{g.project?.name || "Project"}{g.project?.prospect ? ` · ${g.project.prospect}` : ""}</div>
+              </div>
+              <span style={{ fontSize: 11.5, fontWeight: 600, padding: "3px 10px", borderRadius: 7, background: C.redSoft, color: C.red, border: "1px solid #F1D9D6", whiteSpace: "nowrap" }}>Gap</span>
             </Row>
           ))
         )}
