@@ -147,6 +147,9 @@ function authMessage(e) {
   if (/expired or is invalid|otp/i.test(msg)) return "That code is invalid or expired — request a new one.";
   if (/signups? not allowed|signups? .*disabled/i.test(msg)) return "Email sign-ups are disabled in Supabase — enable the Email provider.";
   if (/rate limit/i.test(msg)) return "Too many attempts — wait a minute and try again.";
+  if (e?.status === 504 || /timed out|timeout|deadline exceeded/i.test(msg)) {
+    return "The confirmation email timed out — Supabase has no working email/SMTP. Configure SMTP in Supabase (Authentication → Emails), or temporarily turn off ‘Confirm email’ to test.";
+  }
   if (/sending|smtp|confirmation email/i.test(msg)) return "Couldn't send the confirmation email — check Supabase email/SMTP settings.";
   if (/database error|unexpected_failure/i.test(msg) || e?.status === 500) {
     return "The server rejected the sign-up (database error). Check that all SQL migrations ran and the Email provider + confirmations are enabled in Supabase — see docs/SETUP.md.";

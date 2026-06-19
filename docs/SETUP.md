@@ -22,8 +22,13 @@ From an empty machine to a live shared workspace. The app needs three services: 
      `supabase/migrations/` (each adds a feature; run any you haven't yet).
    - `supabase/seed.sql` (categories + starter InfoSec library so the app isn't empty)
    *(or `supabase db push` + `supabase db reset` if you use the Supabase CLI.)*
-3. **Authentication → Sign In / Providers → Email:** enable the Email provider and turn
-   **Confirm email** ON. Leave **Anonymous Sign-Ins** OFF — the app now requires a real login.
+3. **Authentication → Sign In / Providers → Email:** enable the Email provider. Leave
+   **Anonymous Sign-Ins** OFF — the app now requires a real login. **Confirm email** is optional:
+   - **OFF** (quickest): sign-up logs the user straight in (no emailed code needed). The
+     backstory.ai/people.ai restriction still applies. Use this if SMTP isn't set up yet —
+     a 504 timeout on `/signup` means Supabase tried to send a confirmation email with no working SMTP.
+   - **ON** (recommended for prod): users must enter a 6-digit code, which requires working SMTP
+     (Authentication → Emails) and the template change in step 4. The app supports both modes.
 4. **Authentication → Email Templates → Confirm signup:** include the one-time code in the
    template so users get a 6-digit code (not just a magic link), e.g. add a line:
    `Your code is {{ .Token }}`. The app verifies this code on the confirm-email screen.
