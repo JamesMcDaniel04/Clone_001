@@ -61,6 +61,7 @@ export default function Project() {
   const [draftStartedAt, setDraftStartedAt] = useState(null); // ms timestamp the current draft run began
   const [filter, setFilter] = useState("all"); // all | gap | review | approved — drives the bucket chips
   const [rechecking, setRechecking] = useState(false); // re-drafting gaps against the latest library
+  const [bulk, setBulk] = useState({ token: 0, expanded: false }); // expand-all / collapse-all signal for cards
   const [vendorName, setVendorName] = useState(""); // org name (Settings) — default vendor in the report
 
   useEffect(() => {
@@ -494,7 +495,7 @@ export default function Project() {
     approved: { items: approvedItems, title: "Approved", mode: "compact", hint: "Clean, library-backed answers and manually approved items." },
   };
   const card = ({ q, i }, mode) => (
-    <QuestionCard key={q.id || i} q={q} idx={i} prospect={project.prospect} category={categoryForEntry(q)} libraryLabel={libraryLabel} resolve={resolveMV} onStatusChange={handleStatusChange} onAnswerEdit={handleAnswerEdit} onPromote={handlePromote} onDelete={removeProjectEntry} attention={mode === "attention"} compact={mode === "compact"} />
+    <QuestionCard key={q.id || i} q={q} idx={i} prospect={project.prospect} category={categoryForEntry(q)} libraryLabel={libraryLabel} resolve={resolveMV} onStatusChange={handleStatusChange} onAnswerEdit={handleAnswerEdit} onPromote={handlePromote} onDelete={removeProjectEntry} attention={mode === "attention"} compact={mode === "compact"} bulk={bulk} />
   );
 
   if (project.is_template) {
@@ -600,7 +601,9 @@ export default function Project() {
             <FilterChip label="Gaps" count={gapItems.length} tone="red" active={filter === "gap"} onClick={() => setFilter(filter === "gap" ? "all" : "gap")} />
             <FilterChip label="Needs review" count={reviewItems.length} tone="tan" active={filter === "review"} onClick={() => setFilter(filter === "review" ? "all" : "review")} />
             <FilterChip label="Approved" count={approvedItems.length} tone="green" active={filter === "approved"} onClick={() => setFilter(filter === "approved" ? "all" : "approved")} />
-            <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+            <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
+              <button onClick={() => setBulk((b) => ({ token: b.token + 1, expanded: true }))} style={bulkBtn}>Expand all</button>
+              <button onClick={() => setBulk((b) => ({ token: b.token + 1, expanded: false }))} style={bulkBtn}>Collapse all</button>
               {gapItems.length > 0 && (
                 <Button onClick={recheckGaps} disabled={rechecking} title="Re-draft the open gaps against the latest library & uploaded knowledge docs.">
                   {rechecking ? "Re-checking gaps…" : `Re-check ${gapItems.length} gap${gapItems.length === 1 ? "" : "s"}`}
@@ -866,6 +869,7 @@ function TemplateEntryModal({ initial, onClose, onCreate }) {
   );
 }
 
+const bulkBtn = { border: "none", background: "transparent", color: C.blueInk, cursor: "pointer", fontSize: 12.5, fontWeight: 600, fontFamily: "inherit", padding: "4px 2px" };
 const toolIcon = { display: "inline-flex", alignItems: "center", justifyContent: "center", width: 20, height: 20 };
 const filterBtn = { width: 30, height: 30, border: `1px solid ${C.line}`, background: "#fff", color: C.blueInk, borderRadius: 3, cursor: "pointer" };
 const linkBtn = { border: "none", background: "transparent", color: C.blueInk, cursor: "pointer", fontSize: 13, fontWeight: 650, fontFamily: "inherit" };

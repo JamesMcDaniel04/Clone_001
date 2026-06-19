@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { C } from "../lib/theme.js";
 import { IconShield, IconBook, IconCheck, IconChevron } from "./icons.jsx";
 
@@ -6,12 +6,16 @@ import { IconShield, IconBook, IconCheck, IconChevron } from "./icons.jsx";
 // status) expands the answer; clicking the answer (or the Details toggle) reveals
 // the sources Claude used and its reasoning for the approved / needs-review / gap
 // classification. q = project_entries row; callbacks persist to Supabase.
-export default function QuestionCard({ q, idx, prospect, category, libraryLabel, resolve, onStatusChange, onAnswerEdit, onPromote, onDelete, attention = false, compact = false }) {
+export default function QuestionCard({ q, idx, prospect, category, libraryLabel, resolve, onStatusChange, onAnswerEdit, onPromote, onDelete, attention = false, compact = false, bulk }) {
   const [editing, setEditing] = useState(false);
   const [answer, setAnswer] = useState(q.edited_answer || q.draft_answer || "");
   const [promoted, setPromoted] = useState(false);
   const [expanded, setExpanded] = useState(!compact);
   const [showDetails, setShowDetails] = useState(false);
+
+  // Expand-all / collapse-all: the parent bumps `bulk` (token + target). Sync our
+  // own expand state when it changes; individual toggles still work afterward.
+  useEffect(() => { if (bulk?.token) setExpanded(bulk.expanded); }, [bulk]);
 
   // Tokens like [[Client Name]] are stored raw (reusable) and resolved on display.
   const rawAnswer = q.edited_answer || q.draft_answer || "";
