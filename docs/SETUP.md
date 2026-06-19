@@ -88,7 +88,7 @@ gate if the deployment should only be available to two or three people.
 ## 6. Importing your real library (~1,200 entries)
 
 The seed ships ~17 InfoSec entries. To load your full library, insert into `public.library_entries`
-(columns: `category_id`, `question`, `answer`, `status`, `tags`). Easiest paths: Supabase Table
+(columns: `category_id`, `title`, `content`, `source_type`, `status`, `tags`). Easiest paths: Supabase Table
 Editor → Import CSV into `library_entries`, or a one-off SQL `insert … select` like `seed.sql`.
 Bulk Excel/CSV import in the UI is on the roadmap (see below).
 

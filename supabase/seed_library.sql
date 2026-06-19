@@ -1,9 +1,10 @@
 -- Real People.ai answer library (33 entries) → public.library_entries.
--- Idempotent: skips any question already present. [Client Name] placeholders are
+-- Idempotent: skips any title already present. [Client Name] placeholders are
 -- written as [[Client Name]] so the app's merge-variable substitution resolves them.
+-- The old question becomes the entry title; the old answer becomes its content.
 
-insert into public.library_entries (category_id, question, answer, status, tags)
-select (select id from public.categories where name = e.cat limit 1), e.q, e.a, 'never_reviewed', e.tags
+insert into public.library_entries (category_id, title, content, source_type, status, tags)
+select (select id from public.categories where name = e.cat limit 1), e.q, e.a, 'text', 'never_reviewed', e.tags
 from (values
 
 ('Company Overview',
@@ -93,4 +94,4 @@ from (values
 ('InfoSec (Use this)', 'Do you have whole disk encryption on laptops/desktops?', 'Yes. Full disk encryption on all endpoints using built-in macOS encryption.', '{}'::text[])
 
 ) as e(cat, q, a, tags)
-where not exists (select 1 from public.library_entries le where le.question = e.q);
+where not exists (select 1 from public.library_entries le where le.title = e.q);

@@ -23,10 +23,12 @@ from (values
 where not exists (select 1 from public.merge_variables);
 
 -- Library entries (the Phase-0 InfoSec library). Only when the table is empty.
-insert into public.library_entries (category_id, question, answer, status)
+-- Each entry is a titled block of content; the old question becomes the title
+-- and the old answer becomes the content.
+insert into public.library_entries (category_id, title, content, source_type, status)
 select
   (select id from public.categories where name = 'InfoSec (Use this)' limit 1),
-  e.q, e.a, 'never_reviewed'
+  e.q, e.a, 'text', 'never_reviewed'
 from (values
   ('Do you support SSO via SAML 2.0?', 'Yes. MAX supports single sign-on via SAML 2.0. Compatible identity providers include Okta, Azure AD, OneLogin, and Ping Identity. SSO can be enforced org-wide by administrators. (Source: SSO / SAML 2.0, last updated Apr 2026)'),
   ('Do you support multi-factor authentication?', 'Yes. MFA is supported and can be enforced for all users via the admin console. Supported methods include TOTP authenticator apps and SMS (TOTP recommended). (Source: MFA, last updated Apr 2026)'),
