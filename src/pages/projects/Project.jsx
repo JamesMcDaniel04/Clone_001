@@ -166,9 +166,9 @@ export default function Project() {
             question_text: qText,
             draft_answer: null,
             classification: "gap",
-            flag: true,
-            flag_type: "No library match",
-            flag_reason: "No answer was returned for this question.",
+            flag: false,
+            flag_type: "None",
+            flag_reason: null,
             library_entries_used: [],
           };
           rows.push({
