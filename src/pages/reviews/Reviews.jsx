@@ -70,8 +70,8 @@ function Labeled({ label, children }) {
 
 function ReviewRow({ row, onChange }) {
   const [editing, setEditing] = useState(false);
-  const [q, setQ] = useState(row.question);
-  const [a, setA] = useState(row.answer || "");
+  const [q, setQ] = useState(row.title);
+  const [a, setA] = useState(row.content || "");
 
   async function setStatus(status) {
     try {
@@ -82,7 +82,7 @@ function ReviewRow({ row, onChange }) {
     } catch (e) { alert(e.message); }
   }
   async function save() {
-    try { await updateEntry(row.id, { question: q, answer: a }); setEditing(false); onChange(); } catch (e) { alert(e.message); }
+    try { await updateEntry(row.id, { title: q, content: a }); setEditing(false); onChange(); } catch (e) { alert(e.message); }
   }
   async function remove() {
     if (!confirm("Delete this library entry?")) return;
@@ -99,14 +99,14 @@ function ReviewRow({ row, onChange }) {
           <textarea value={a} onChange={(e) => setA(e.target.value)} style={{ width: "100%", minHeight: 110, fontSize: 13.5, lineHeight: 1.7, padding: "10px 12px", borderRadius: 9, border: `1px solid ${C.blueSoft}`, boxSizing: "border-box", fontFamily: "inherit", color: C.body }} />
           <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
             <Button variant="primary" onClick={save} style={{ padding: "6px 14px" }}>Save</Button>
-            <Button onClick={() => { setQ(row.question); setA(row.answer || ""); setEditing(false); }} style={{ padding: "6px 14px" }}>Cancel</Button>
+            <Button onClick={() => { setQ(row.title); setA(row.content || ""); setEditing(false); }} style={{ padding: "6px 14px" }}>Cancel</Button>
           </div>
         </div>
       ) : (
         <div style={{ display: "flex", justifyContent: "space-between", gap: 14, alignItems: "flex-start" }}>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: C.ink, marginBottom: 3 }}>{row.question}</div>
-            <div style={{ fontSize: 13, color: C.body, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{row.answer}</div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: C.ink, marginBottom: 3 }}>{row.title}</div>
+            <div style={{ fontSize: 13, color: C.body, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{row.content}</div>
             <div style={{ fontSize: 11.5, color: C.faint, marginTop: 8 }}>
               {row.category?.name || "No Category"} · updated {row.updated_at?.slice(0, 10)}{row.reviewer?.full_name ? ` · reviewed by ${row.reviewer.full_name}` : ""}
             </div>

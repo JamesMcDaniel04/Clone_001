@@ -21,6 +21,9 @@ export async function createCategory(name) {
 }
 
 // ── Library entries ─────────────────────────────────────────────────────────
+// An entry is a titled block of knowledge content (pasted text or text extracted
+// from an uploaded file), filed under a category and run through the review
+// workflow. `title`/`content` replaced the old question/answer pair.
 export async function listEntries({ categoryId, status, search } = {}) {
   let q = supabase
     .from("library_entries")
@@ -29,7 +32,7 @@ export async function listEntries({ categoryId, status, search } = {}) {
     .limit(500);
   if (categoryId) q = q.eq("category_id", categoryId);
   if (status && status !== "all") q = q.eq("status", status);
-  if (search) q = q.or(`question.ilike.%${search}%,answer.ilike.%${search}%`);
+  if (search) q = q.or(`title.ilike.%${search}%,content.ilike.%${search}%`);
   return unwrap(await q);
 }
 export async function createEntry(fields) {
@@ -39,18 +42,20 @@ export async function updateEntry(id, fields) {
   return unwrap(await supabase.from("library_entries").update(fields).eq("id", id).select().single());
 }
 
-// Structured library entries (question · answer · category) for grounding the
-// drafting API, scoping by category, and live match previews. The signed-in
-// client can always read this, so we pass it to /api/draft rather than relying
-// on the server key to bypass RLS.
+// Library entries (title · content · category) for grounding the drafting API,
+// scoping by category, and live match previews. The signed-in client can always
+// read this, so we pass it to /api/draft rather than relying on the server key to
+// bypass RLS. Mapped to the shared "matchable entry" shape ({ question, answer })
+// used across the drafting pool (library + documents + past answers) — here the
+// title plays the label role and the content plays the body role.
 export async function getLibraryEntries() {
   const data = unwrap(
-    await supabase.from("library_entries").select("question, answer, category_id, category:category_id(name)").not("answer", "is", null).limit(2000)
+    await supabase.from("library_entries").select("title, content, category_id, category:category_id(name)").not("content", "is", null).limit(2000)
   );
-  return data || [];
+  return (data || []).map((r) => ({ question: r.title, answer: r.content, category_id: r.category_id, category: r.category }));
 }
 
-// Format a set of library entries into the grouped text block the drafting
+// Format a set of matchable entries into the grouped text block the drafting
 // prompt expects. Returns null when there's nothing to ground on (caller then
 // falls back to the server/bundled library).
 export function libraryTextFromEntries(entries) {
@@ -202,7 +207,7 @@ export async function listReviews({ categoryId, status, search } = {}) {
     .limit(300);
   if (categoryId && categoryId !== "all") q = q.eq("category_id", categoryId);
   if (status && status !== "all") q = q.eq("status", status);
-  if (search) q = q.or(`question.ilike.%${search}%,answer.ilike.%${search}%`);
+  if (search) q = q.or(`title.ilike.%${search}%,content.ilike.%${search}%`);
   return unwrap(await q);
 }
 
@@ -218,9 +223,9 @@ export async function listProjectReviews({ projectId, search } = {}) {
   return unwrap(await q);
 }
 
-// Find an existing library entry whose question matches (case-insensitive, exact).
-export async function findLibraryEntryByQuestion(question) {
-  const data = unwrap(await supabase.from("library_entries").select("id, question").ilike("question", question).limit(1));
+// Find an existing library entry whose title matches (case-insensitive, exact).
+export async function findLibraryEntryByTitle(title) {
+  const data = unwrap(await supabase.from("library_entries").select("id, title").ilike("title", title).limit(1));
   return data?.[0] || null;
 }
 

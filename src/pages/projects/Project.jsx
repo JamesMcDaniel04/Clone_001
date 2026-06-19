@@ -261,7 +261,7 @@ export default function Project() {
   async function handlePromote(idx) {
     const q = entries[idx];
     try {
-      await createEntry({ question: q.question, answer: q.edited_answer, status: "never_reviewed" });
+      await createEntry({ title: q.question, content: q.edited_answer, source_type: "text", status: "never_reviewed" });
     } catch (e) { setErr("Could not save to library: " + e.message); }
   }
 

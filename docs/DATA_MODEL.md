@@ -12,7 +12,7 @@ must be limited to a small team.
 |---|---|---|
 | `profiles` | Mirror of `auth.users`, auto-created on signup by a trigger | `id` (=auth uid), `email`, `full_name`, `avatar_url`, `role` |
 | `categories` | Library categories (the Library Management rows) | `name`, `parent_id` (sub-categories), `next_review_cycle`, `reviewer_id` |
-| `library_entries` | The answer library — system of record (~1,200 entries) | `category_id`, `question`, `answer`, `status`, `tags[]`, `times_used`, `created_by/updated_by/reviewed_by`, `reviewed_at` |
+| `library_entries` | The knowledge library — system of record. Each entry is a titled block of content (pasted text or text extracted from an uploaded file) | `category_id`, `title`, `content`, `source_type` (`text`\|`file`), `file_type`, `file_size`, `status`, `tags[]`, `times_used`, `created_by/updated_by/reviewed_by`, `reviewed_at` |
 | `tags` | Reusable labels | `name` (unique) |
 | `merge_variables` | Reusable values for project answers | `name`, `type`, `value`, `comment`, `times_used` |
 | `projects` | A questionnaire / RFP being answered | `name`, `prospect`, `status`, `is_template`, `owner_id` |

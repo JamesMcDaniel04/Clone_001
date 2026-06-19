@@ -30,8 +30,8 @@ export async function getDbLibrary() {
   try { await ensureServerSession(); } catch { return null; }
   const { data, error } = await supabaseAdmin
     .from("library_entries")
-    .select("question, answer, category:category_id(name)")
-    .not("answer", "is", null)
+    .select("title, content, category:category_id(name)")
+    .not("content", "is", null)
     .limit(2000);
   if (error || !data || data.length === 0) return null;
 
@@ -39,7 +39,7 @@ export async function getDbLibrary() {
   for (const row of data) {
     const cat = row.category?.name || "General";
     if (!byCategory.has(cat)) byCategory.set(cat, []);
-    byCategory.get(cat).push(`**${row.question}**\n${row.answer}`);
+    byCategory.get(cat).push(`**${row.title}**\n${row.content}`);
   }
   return [...byCategory.entries()]
     .map(([cat, items]) => `### ${cat}\n\n${items.join("\n\n")}`)

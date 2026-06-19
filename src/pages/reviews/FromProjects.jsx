@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { C } from "../../lib/theme.js";
-import { listProjectReviews, listProjects, listCategories, createEntry, updateEntry, updateProjectEntry, findLibraryEntryByQuestion } from "../../lib/db.js";
+import { listProjectReviews, listProjects, listCategories, createEntry, updateEntry, updateProjectEntry, findLibraryEntryByTitle } from "../../lib/db.js";
 import { PageHeader, Button, Spinner, Empty, Select, Input, Pager } from "../../components/ui.jsx";
 import { IconBook } from "../../components/icons.jsx";
 
@@ -29,17 +29,19 @@ export default function FromProjects() {
 
   function mark(id, kind, msg) { setActed((a) => ({ ...a, [id]: { kind, msg } })); }
 
+  // Curate a project answer into the library as a content entry: the question
+  // becomes the entry title, the answer becomes its content.
   async function addAsNew(entry, categoryId) {
     try {
-      await createEntry({ category_id: categoryId || null, question: entry.question, answer: entry.edited_answer || entry.draft_answer, status: "never_reviewed", tags: [] });
+      await createEntry({ category_id: categoryId || null, title: entry.question, content: entry.edited_answer || entry.draft_answer, source_type: "text", status: "never_reviewed", tags: [] });
       mark(entry.id, "added", "Added as a new library entry");
     } catch (e) { setErr(e.message); }
   }
   async function updateLibrary(entry, categoryId) {
     try {
-      const match = await findLibraryEntryByQuestion(entry.question);
-      if (match) await updateEntry(match.id, { answer: entry.edited_answer || entry.draft_answer, status: "approved_with_edits" });
-      else await createEntry({ category_id: categoryId || null, question: entry.question, answer: entry.edited_answer || entry.draft_answer, status: "approved_with_edits" });
+      const match = await findLibraryEntryByTitle(entry.question);
+      if (match) await updateEntry(match.id, { content: entry.edited_answer || entry.draft_answer, status: "approved_with_edits" });
+      else await createEntry({ category_id: categoryId || null, title: entry.question, content: entry.edited_answer || entry.draft_answer, source_type: "text", status: "approved_with_edits" });
       mark(entry.id, "updated", match ? "Updated the existing library entry" : "No match found — added as new");
     } catch (e) { setErr(e.message); }
   }

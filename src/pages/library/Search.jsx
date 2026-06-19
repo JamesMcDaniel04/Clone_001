@@ -25,15 +25,15 @@ export default function Search() {
 
   return (
     <div>
-      <PageHeader title="Search the Library" subtitle="Find an existing answer across every category." />
+      <PageHeader title="Search the Library" subtitle="Find existing knowledge content across every category." />
       <div style={{ display: "flex", gap: 8, marginBottom: 22, maxWidth: 620 }}>
-        <Input value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === "Enter" && run()} placeholder="Search questions & answers…" autoFocus />
+        <Input value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === "Enter" && run()} placeholder="Search titles & content…" autoFocus />
         <Button variant="primary" onClick={run} style={{ whiteSpace: "nowrap" }}>Search</Button>
       </div>
 
       {err && <div style={{ color: C.red, fontSize: 13, marginBottom: 12 }}>{err}</div>}
       {loading ? <Spinner /> : results == null ? (
-        <Empty title="Search the answer library" hint="Type a keyword and hit Search." />
+        <Empty title="Search the library" hint="Type a keyword and hit Search." />
       ) : results.length === 0 ? (
         <Empty title="No matches" hint="Try different keywords." />
       ) : (
@@ -42,10 +42,10 @@ export default function Search() {
           {results.map((e) => (
             <div key={e.id} style={{ background: "#fff", border: `1px solid ${C.cardLine}`, borderRadius: 12, padding: "14px 16px", marginBottom: 10 }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 4 }}>
-                <div style={{ fontSize: 14, fontWeight: 600, color: C.ink }}>{e.question}</div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: C.ink }}>{e.title}</div>
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, color: C.muted, whiteSpace: "nowrap" }}><StatusDot color={STATUS_DOT[e.status]} /> {STATUS_LABEL[e.status]}</span>
               </div>
-              <div style={{ fontSize: 13, color: C.body, lineHeight: 1.6 }}>{e.answer}</div>
+              <div style={{ fontSize: 13, color: C.body, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{e.content}</div>
               {e.category && (
                 <Link to={`/library/category/${e.category_id}`} style={{ fontSize: 12, color: C.blueInk, textDecoration: "none", marginTop: 8, display: "inline-block" }}>{e.category.name} →</Link>
               )}
