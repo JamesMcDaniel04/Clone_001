@@ -49,7 +49,8 @@ export default function Login() {
         // success → session set, redirect handled by the `user` guard
       }
     } catch (e2) {
-      setErr(friendly(e2.message));
+      console.error("Auth error:", e2);
+      setErr(authMessage(e2));
     } finally { setBusy(false); }
   }
 
@@ -63,7 +64,8 @@ export default function Login() {
       if (error) throw error;
       // success → session set, redirect handled by the `user` guard
     } catch (e2) {
-      setErr(friendly(e2.message));
+      console.error("Auth error:", e2);
+      setErr(authMessage(e2));
     } finally { setBusy(false); }
   }
 
@@ -134,13 +136,23 @@ export default function Login() {
   );
 }
 
-// Map a few Supabase auth errors to friendlier copy; pass others through.
-function friendly(msg = "") {
-  if (/Database error saving new user/i.test(msg)) return "Sign-up is restricted to backstory.ai and people.ai email addresses.";
-  if (/User already registered/i.test(msg)) return "That email already has an account — try signing in.";
-  if (/Invalid login credentials/i.test(msg)) return "Incorrect email or password.";
-  if (/Token has expired or is invalid/i.test(msg)) return "That code is invalid or expired — request a new one.";
-  return msg;
+// Turn a Supabase auth error into readable copy. GoTrue sometimes returns an
+// opaque body (message === "{}", HTTP 500) for database/trigger/email failures —
+// never show that raw; map known cases and give a diagnosable fallback.
+function authMessage(e) {
+  const raw = typeof e?.message === "string" ? e.message.trim() : "";
+  const msg = raw && raw !== "{}" ? raw : "";
+  if (/already registered/i.test(msg)) return "That email already has an account — try signing in.";
+  if (/invalid login credentials/i.test(msg)) return "Incorrect email or password.";
+  if (/expired or is invalid|otp/i.test(msg)) return "That code is invalid or expired — request a new one.";
+  if (/signups? not allowed|signups? .*disabled/i.test(msg)) return "Email sign-ups are disabled in Supabase — enable the Email provider.";
+  if (/rate limit/i.test(msg)) return "Too many attempts — wait a minute and try again.";
+  if (/sending|smtp|confirmation email/i.test(msg)) return "Couldn't send the confirmation email — check Supabase email/SMTP settings.";
+  if (/database error|unexpected_failure/i.test(msg) || e?.status === 500) {
+    return "The server rejected the sign-up (database error). Check that all SQL migrations ran and the Email provider + confirmations are enabled in Supabase — see docs/SETUP.md.";
+  }
+  if (msg) return msg;
+  return `Couldn't complete that${e?.status ? ` (HTTP ${e.status})` : ""}. See the browser console and Supabase → Authentication → Logs for details.`;
 }
 
 const lbl = { display: "block", fontSize: 12.5, fontWeight: 600, color: C.body, marginBottom: 6 };
