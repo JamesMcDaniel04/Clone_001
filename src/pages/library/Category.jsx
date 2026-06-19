@@ -11,8 +11,8 @@ async function extractText(file) {
   const kind = fileKind(file.name);
   if (kind === "pdf") return await readPdf(file);
   if (kind === "docx") return await readDocx(file);
-  if (kind === "text") return await readTextFile(file);
-  throw new Error("Unsupported file — upload a .pdf, .docx, or .txt.");
+  if (kind === "text") return await readTextFile(file); // .txt and .md
+  throw new Error("Unsupported file — upload a .pdf, .docx, .txt, or .md.");
 }
 
 export default function Category() {
@@ -54,7 +54,7 @@ export default function Category() {
       {err && <div style={{ color: C.red, fontSize: 13, marginBottom: 12 }}>{err}</div>}
 
       {entries == null ? <Spinner /> : entries.length === 0 ? (
-        <Empty title="No content in this category yet" hint="Paste text or upload a .pdf, .docx, or .txt file to add knowledge here." />
+        <Empty title="No content in this category yet" hint="Paste text or upload a .pdf, .docx, .txt, or .md file to add knowledge here." />
       ) : (
         entries.map((e) => <EntryRow key={e.id} entry={e} onChanged={load} onError={setErr} />)
       )}
@@ -122,8 +122,8 @@ function AddModal({ onClose, onSave, onError }) {
       ) : (
         <Field label="File">
           <label style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, fontSize: 13, fontWeight: 600, padding: "22px 16px", borderRadius: 10, cursor: "pointer", background: C.panel, color: C.body, border: `1.5px dashed ${C.cardLine}`, fontFamily: "inherit" }}>
-            {busy ? "Reading…" : file ? "Replace file (.pdf, .docx, .txt)" : "Choose a file (.pdf, .docx, .txt)"}
-            <input type="file" accept=".pdf,.docx,.txt" onChange={onFile} disabled={busy} style={{ display: "none" }} />
+            {busy ? "Reading…" : file ? "Replace file (.pdf, .docx, .txt, .md)" : "Choose a file (.pdf, .docx, .txt, .md)"}
+            <input type="file" accept=".pdf,.docx,.txt,.md" onChange={onFile} disabled={busy} style={{ display: "none" }} />
           </label>
           {file && (
             <div style={{ fontSize: 12.5, color: "#15803D", background: C.greenSoft, border: "1px solid #BBE7CB", borderRadius: 8, padding: "7px 11px", marginTop: 10 }}>
