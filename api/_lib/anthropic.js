@@ -24,7 +24,7 @@ Rules:
    - "approved": the answer is fully grounded in the answer library or supplemental knowledge sources, has no limitation or caveat, and needs no human sign-off — safe to send as-is.
    - "needs_review": you produced a grounded answer, but a human should validate it before sending — it touches a known limitation (FedRAMP, single-tenant / private cloud, EMEA / non-US hosting, ITAR, IL4/IL5, CMMC…), needs legal or engineering sign-off, or rests on partial / weak grounding.
    - "gap": the provided knowledge does NOT actually answer this question — we have no real answer on file yet. Give a conservative best-effort answer if you can, but classify it "gap" so the team knows to add it to the library. A question with an empty "library_entries_used" is almost always a gap.
-   Only "needs_review" carries a review flag. Set "flag" to true ONLY when classification is "needs_review". For "approved" AND "gap", set flag to false, flag_type to "None", and flag_reason to null — a gap is self-evident and must not also be flagged for review.
+   Only "needs_review" carries a review flag. Set "flag" to true ONLY when classification is "needs_review". For "approved" AND "gap", set flag to false and flag_type to "None" — a gap is self-evident and must not also be flagged for review. Always set "flag_reason" (for all three classifications) — it is the human-readable explanation of WHY you chose this classification.
 
 For each question return:
 - question_id: the question's id (e.g. "Q1"), echoing the input numbering.
@@ -32,7 +32,7 @@ For each question return:
 - draft_answer: the drafted answer, or null if there is genuinely nothing to say.
 - classification: one of "approved", "needs_review", or "gap" (see rule 9).
 - flag: true only when classification is "needs_review".
-- flag_reason: a one-sentence explanation when flag is true, otherwise null.
+- flag_reason: ALWAYS a one-sentence explanation of why you assigned this classification — e.g. why it is safe to approve, what a reviewer must check, or what knowledge is missing for a gap. Never null.
 - flag_type: one of "Needs legal", "Needs engineering", "Compliance gap", "Known gap", "No library match", or "None" when flag is false.
 - library_entries_used: the exact names of the library entries the answer drew on.`;
 
@@ -53,7 +53,7 @@ const ANSWER_SCHEMA = {
           draft_answer: { type: ["string", "null"] },
           classification: { type: "string", enum: ["approved", "needs_review", "gap"] },
           flag: { type: "boolean" },
-          flag_reason: { type: ["string", "null"] },
+          flag_reason: { type: "string" },
           flag_type: {
             type: "string",
             enum: ["None", "Needs legal", "Needs engineering", "Compliance gap", "Known gap", "No library match"],

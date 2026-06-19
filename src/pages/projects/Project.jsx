@@ -218,7 +218,7 @@ export default function Project() {
   }
 
   function gapFallback(qText, i) {
-    return { question_id: `Q${i + 1}`, question_text: qText, draft_answer: null, classification: "gap", flag: false, flag_type: "None", flag_reason: null, library_entries_used: [] };
+    return { question_id: `Q${i + 1}`, question_text: qText, draft_answer: null, classification: "gap", flag: false, flag_type: "None", flag_reason: "No matching library content was found for this question.", library_entries_used: [] };
   }
 
   // Draft a list of questions in concurrent batches against a matchable pool,
