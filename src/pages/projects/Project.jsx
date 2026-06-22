@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useLocation } from "react-router-dom";
 import { C } from "../../lib/theme.js";
-import { getProject, getProjectEntries, insertProjectEntries, updateProjectEntry, deleteProjectEntry, createEntry, listMergeVariables, updateProject, getLibraryEntries, libraryTextFromEntries, listCategories, getKnowledgeEntries, getSetting } from "../../lib/db.js";
+import { getProject, getProjectEntries, insertProjectEntries, updateProjectEntry, deleteProjectEntry, createEntry, listMergeVariables, updateProject, getLibraryEntries, libraryTextFromEntries, listCategories, listTags, getKnowledgeEntries, getSetting } from "../../lib/db.js";
 import { PageHeader, Button, Spinner, Modal, Field, Input, Select } from "../../components/ui.jsx";
 import Stepper from "../../components/Stepper.jsx";
 import QuestionCard from "../../components/QuestionCard.jsx";
@@ -52,7 +52,8 @@ export default function Project() {
   const [templateEntryOpen, setTemplateEntryOpen] = useState(false);
   const [libEntries, setLibEntries] = useState([]);
   const [categories, setCategories] = useState([]);
-  const [draftScope, setDraftScope] = useState({ id: "all", name: "Full library" });
+  const [tags, setTags] = useState([]);
+  const [draftScope, setDraftScope] = useState({ kind: "all", id: "all", name: "Full library" });
   const [libraryLabel, setLibraryLabel] = useState("Full library");
   const [matches, setMatches] = useState([]); // [{ question, entries }] shown live while drafting
   const [reportOpen, setReportOpen] = useState(false);
@@ -70,6 +71,7 @@ export default function Project() {
     listMergeVariables().then(setMergeVars).catch(() => {});
     getLibraryEntries().then(setLibEntries).catch(() => {});
     listCategories().then(setCategories).catch(() => {});
+    listTags().then(setTags).catch(() => {});
     getSetting("vendor_name").then((v) => v && setVendorName(v)).catch(() => {});
   }, [id]);
 
@@ -120,17 +122,31 @@ export default function Project() {
   }
 
   // Resolve [[merge variable]] tokens against this project (client name, etc.).
-  const { resolve: resolveMV } = buildResolver(mergeVars, project);
+  const { resolve: resolveMV, unresolvedTokensIn } = useMemo(() => buildResolver(mergeVars, project), [mergeVars, project]);
+
+  // [[tokens]] in approved answers that DON'T resolve — these would ship raw to the
+  // customer, so we warn before export. Deduped across all approved answers.
+  const unresolvedInApproved = useMemo(() => {
+    const out = new Set();
+    for (const q of entries || []) {
+      if (q.status !== "approved") continue;
+      for (const t of unresolvedTokensIn(q.edited_answer || q.draft_answer || "")) out.add(t);
+    }
+    return [...out];
+  }, [entries, unresolvedTokensIn]);
 
   async function handleDraft() {
     const parsed = parseQuestions(raw);
     if (!parsed.length) return;
     setErr(null);
 
-    // Scope the library to the chosen category (or the whole library) and surface
-    // the matched entries live while Claude drafts — the model returns the
+    // Scope the library to the chosen category or tag (or the whole library) and
+    // surface the matched entries live while Claude drafts — the model returns the
     // authoritative library_entries_used afterward.
-    const scoped = draftScope.id === "all" ? libEntries : libEntries.filter((e) => e.category_id === draftScope.id);
+    const scoped =
+      draftScope.kind === "category" ? libEntries.filter((e) => e.category_id === draftScope.id)
+      : draftScope.kind === "tag" ? libEntries.filter((e) => (e.tags || []).includes(draftScope.id))
+      : libEntries;
     setMatches(parsed.map((q) => ({ question: q, entries: matchLibraryEntries(q, scoped) })));
     setLibraryLabel(draftScope.name);
     // Persist the original questionnaire (sections + checkbox options) so the
@@ -495,7 +511,7 @@ export default function Project() {
     approved: { items: approvedItems, title: "Approved", mode: "compact", hint: "Clean, library-backed answers and manually approved items." },
   };
   const card = ({ q, i }, mode) => (
-    <QuestionCard key={q.id || i} q={q} idx={i} prospect={project.prospect} category={categoryForEntry(q)} libraryLabel={libraryLabel} resolve={resolveMV} onStatusChange={handleStatusChange} onAnswerEdit={handleAnswerEdit} onPromote={handlePromote} onDelete={removeProjectEntry} attention={mode === "attention"} compact={mode === "compact"} bulk={bulk} />
+    <QuestionCard key={q.id || i} q={q} idx={i} prospect={project.prospect} category={categoryForEntry(q)} libraryLabel={libraryLabel} resolve={resolveMV} unresolvedTokensIn={unresolvedTokensIn} onStatusChange={handleStatusChange} onAnswerEdit={handleAnswerEdit} onPromote={handlePromote} onDelete={removeProjectEntry} attention={mode === "attention"} compact={mode === "compact"} bulk={bulk} />
   );
 
   if (project.is_template) {
@@ -578,16 +594,31 @@ export default function Project() {
             <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: C.faint }}>
               <span>Draft against:</span>
               <Select
-                value={draftScope.id}
+                value={draftScope.kind === "category" ? `cat:${draftScope.id}` : draftScope.kind === "tag" ? `tag:${draftScope.name}` : "all"}
                 onChange={(e) => {
                   const v = e.target.value;
-                  const cat = categories.find((c) => c.id === v);
-                  setDraftScope(v === "all" ? { id: "all", name: "Full library" } : { id: v, name: cat?.name || "Library" });
+                  if (v === "all") return setDraftScope({ kind: "all", id: "all", name: "Full library" });
+                  if (v.startsWith("cat:")) {
+                    const cid = v.slice(4);
+                    const cat = categories.find((c) => c.id === cid);
+                    return setDraftScope({ kind: "category", id: cid, name: cat?.name || "Category" });
+                  }
+                  const name = v.slice(4);
+                  setDraftScope({ kind: "tag", id: name, name: `Tag: ${name}` });
                 }}
                 style={{ width: "auto", padding: "5px 9px", fontSize: 12.5 }}
               >
                 <option value="all">Full library</option>
-                {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {categories.length > 0 && (
+                  <optgroup label="Categories">
+                    {categories.map((c) => <option key={c.id} value={`cat:${c.id}`}>{c.name}</option>)}
+                  </optgroup>
+                )}
+                {tags.length > 0 && (
+                  <optgroup label="Tags">
+                    {tags.map((t) => <option key={t.id} value={`tag:${t.name}`}>#{t.name}</option>)}
+                  </optgroup>
+                )}
               </Select>
             </div>
             <span style={{ fontSize: 12.5, color: C.faint }}>{raw.trim() ? `~${parseQuestions(raw).length} questions detected` : ""}</span>
@@ -612,6 +643,14 @@ export default function Project() {
               {cleanPendingApproval > 0 && <Button variant="primary" onClick={approveCleanAnswers}>Approve {cleanPendingApproval} clean</Button>}
             </div>
           </div>
+
+          {unresolvedInApproved.length > 0 && (
+            <div style={{ marginBottom: 16, background: C.cream, border: "1px solid #EFE2C2", borderLeft: `3px solid ${C.amber}`, borderRadius: 8, padding: "10px 14px", fontSize: 12.5, color: "#6B4E1E", lineHeight: 1.55 }}>
+              <span style={{ marginRight: 4 }}>⚠</span>
+              <strong>Unresolved merge variable{unresolvedInApproved.length === 1 ? "" : "s"} in approved answers:</strong>{" "}
+              {unresolvedInApproved.map((t) => `[[${t}]]`).join(", ")} — these will export literally. Add them under Library → Merge Variables, or edit the answers.
+            </div>
+          )}
 
           {filter === "all" ? (
             ["gap", "review", "approved"].map((key) => {

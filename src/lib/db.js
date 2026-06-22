@@ -1,6 +1,7 @@
 // Thin data-access helpers over the Supabase client. Every function throws on
 // error so callers can try/catch. RLS enforces access; these run as the signed-in user.
 import { supabase } from "./supabaseClient.js";
+import { norm } from "./mergeVars.js";
 
 function unwrap({ data, error }) {
   if (error) throw new Error(error.message);
@@ -24,7 +25,7 @@ export async function createCategory(name) {
 // An entry is a titled block of knowledge content (pasted text or text extracted
 // from an uploaded file), filed under a category and run through the review
 // workflow. `title`/`content` replaced the old question/answer pair.
-export async function listEntries({ categoryId, status, search } = {}) {
+export async function listEntries({ categoryId, status, search, tags } = {}) {
   let q = supabase
     .from("library_entries")
     .select("*, category:category_id(name), updater:updated_by(full_name)")
@@ -33,6 +34,7 @@ export async function listEntries({ categoryId, status, search } = {}) {
   if (categoryId) q = q.eq("category_id", categoryId);
   if (status && status !== "all") q = q.eq("status", status);
   if (search) q = q.or(`title.ilike.%${search}%,content.ilike.%${search}%`);
+  if (tags?.length) q = q.contains("tags", tags); // entries carrying ALL given tags
   return unwrap(await q);
 }
 export async function createEntry(fields) {
@@ -50,9 +52,9 @@ export async function updateEntry(id, fields) {
 // title plays the label role and the content plays the body role.
 export async function getLibraryEntries() {
   const data = unwrap(
-    await supabase.from("library_entries").select("title, content, category_id, category:category_id(name)").not("content", "is", null).limit(2000)
+    await supabase.from("library_entries").select("title, content, category_id, category:category_id(name), tags").not("content", "is", null).limit(2000)
   );
-  return (data || []).map((r) => ({ question: r.title, answer: r.content, category_id: r.category_id, category: r.category }));
+  return (data || []).map((r) => ({ question: r.title, answer: r.content, category_id: r.category_id, category: r.category, tags: r.tags || [] }));
 }
 
 // Format a set of matchable entries into the grouped text block the drafting
@@ -147,10 +149,39 @@ export async function listTags() {
   return unwrap(await supabase.from("tags").select("*").order("name"));
 }
 export async function createTag(name) {
-  return unwrap(await supabase.from("tags").insert({ name }).select().single());
+  const clean = (name || "").trim();
+  const { data, error } = await supabase.from("tags").insert({ name: clean }).select().single();
+  if (error) {
+    // 23505 = unique violation (name or the case-insensitive lower(name) index).
+    if (error.code === "23505") throw new Error(`Tag "${clean}" already exists.`);
+    throw new Error(error.message);
+  }
+  return data;
 }
-export async function updateTag(id, fields) {
-  return unwrap(await supabase.from("tags").update(fields).eq("id", id).select().single());
+// Rename a tag, then propagate the new name into every library_entries.tags[] that
+// referenced the old one (migration 0010 RPC keeps the arrays consistent).
+export async function renameTag(id, oldName, newName) {
+  const clean = (newName || "").trim();
+  const { data, error } = await supabase.from("tags").update({ name: clean }).eq("id", id).select().single();
+  if (error) {
+    if (error.code === "23505") throw new Error(`Tag "${clean}" already exists.`);
+    throw new Error(error.message);
+  }
+  if (clean !== oldName) {
+    const { error: rpcErr } = await supabase.rpc("rename_tag_in_entries", { old_name: oldName, new_name: clean });
+    if (rpcErr) throw new Error(rpcErr.message);
+  }
+  return data;
+}
+// Library-entry counts per tag → { [tagName]: count }. Powers the Tags page.
+export async function listTagUsage() {
+  const { data, error } = await supabase.rpc("tag_usage_counts");
+  if (error) throw new Error(error.message);
+  return Object.fromEntries((data || []).map((r) => [r.tag, Number(r.count) || 0]));
+}
+// Set the tags array on a library entry (used by the tag picker).
+export async function setEntryTags(id, tags) {
+  return updateEntry(id, { tags });
 }
 
 // ── Merge variables ─────────────────────────────────────────────────────────
@@ -199,7 +230,7 @@ export async function deleteProjectEntry(id) {
 }
 
 // ── Reviews (filtered query over library entries) ───────────────────────────
-export async function listReviews({ categoryId, status, search } = {}) {
+export async function listReviews({ categoryId, status, search, tags } = {}) {
   let q = supabase
     .from("library_entries")
     .select("*, category:category_id(name), updater:updated_by(full_name), reviewer:reviewed_by(full_name)")
@@ -208,6 +239,7 @@ export async function listReviews({ categoryId, status, search } = {}) {
   if (categoryId && categoryId !== "all") q = q.eq("category_id", categoryId);
   if (status && status !== "all") q = q.eq("status", status);
   if (search) q = q.or(`title.ilike.%${search}%,content.ilike.%${search}%`);
+  if (tags?.length) q = q.contains("tags", tags);
   return unwrap(await q);
 }
 
@@ -260,7 +292,34 @@ export async function updateCategory(id, fields) { return unwrap(await supabase.
 export async function deleteCategory(id) { unwrap(await supabase.from("categories").delete().eq("id", id)); }
 export async function updateMergeVariable(id, fields) { return unwrap(await supabase.from("merge_variables").update(fields).eq("id", id).select().single()); }
 export async function deleteMergeVariable(id) { unwrap(await supabase.from("merge_variables").delete().eq("id", id)); }
-export async function deleteTag(id) { unwrap(await supabase.from("tags").delete().eq("id", id)); }
+// Strip the tag from every library entry that carries it (migration 0010 RPC),
+// then delete the tag row so no entry is left pointing at a dead tag.
+export async function deleteTag(id, name) {
+  if (name) {
+    const { error } = await supabase.rpc("remove_tag_from_entries", { tag_name: name });
+    if (error) throw new Error(error.message);
+  }
+  unwrap(await supabase.from("tags").delete().eq("id", id));
+}
+
+// Live "Used" counts for merge variables: how many library entries contain each
+// variable's [[token]] (matched through the same normalization the resolver uses,
+// so spelling variants count). Returns { [variableName]: count }.
+export async function mergeVariableUsage(variables) {
+  if (!variables?.length) return {};
+  const entries = await getLibraryEntries();
+  const byNorm = new Map(variables.map((v) => [norm(v.name), v.name]));
+  const counts = Object.fromEntries(variables.map((v) => [v.name, 0]));
+  for (const e of entries) {
+    const seen = new Set();
+    for (const m of (e.answer || "").matchAll(/\[\[\s*([^\]]+?)\s*\]\]/g)) {
+      const orig = byNorm.get(norm(m[1]));
+      if (orig != null) seen.add(orig);
+    }
+    for (const name of seen) counts[name] += 1; // count each entry at most once per variable
+  }
+  return counts;
+}
 
 // ── Prospects (managed in Settings) ──────────────────────────────────────────
 export async function listProspects() { return unwrap(await supabase.from("prospects").select("*").order("name")); }

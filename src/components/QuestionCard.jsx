@@ -6,7 +6,7 @@ import { IconShield, IconBook, IconCheck, IconChevron } from "./icons.jsx";
 // status) expands the answer; clicking the answer (or the Details toggle) reveals
 // the sources Claude used and its reasoning for the approved / needs-review / gap
 // classification. q = project_entries row; callbacks persist to Supabase.
-export default function QuestionCard({ q, idx, prospect, category, libraryLabel, resolve, onStatusChange, onAnswerEdit, onPromote, onDelete, attention = false, compact = false, bulk }) {
+export default function QuestionCard({ q, idx, prospect, category, libraryLabel, resolve, unresolvedTokensIn, onStatusChange, onAnswerEdit, onPromote, onDelete, attention = false, compact = false, bulk }) {
   const [editing, setEditing] = useState(false);
   const [answer, setAnswer] = useState(q.edited_answer || q.draft_answer || "");
   const [promoted, setPromoted] = useState(false);
@@ -22,6 +22,8 @@ export default function QuestionCard({ q, idx, prospect, category, libraryLabel,
   const shownAnswer = resolve ? resolve(rawAnswer) : rawAnswer;
   const mvApplied = shownAnswer !== rawAnswer;
   const hasAnswer = !!(q.edited_answer || q.draft_answer);
+  // [[tokens]] in this answer that don't resolve — they'd export literally.
+  const unresolved = unresolvedTokensIn ? unresolvedTokensIn(rawAnswer) : [];
 
   // Claude classifies answers into the three review buckets (approved /
   // needs_review / gap); draft & edited are manual states. Legacy needs_legal /
@@ -75,6 +77,11 @@ export default function QuestionCard({ q, idx, prospect, category, libraryLabel,
               <span style={{ fontSize: 12.5, color: C.muted, fontWeight: 600 }}>Claude draft</span>
               {mvApplied && !editing && (
                 <span style={{ fontSize: 11, color: C.blueInk, background: C.blueSoft, borderRadius: 6, padding: "1px 7px", fontWeight: 600 }}>merge variables applied</span>
+              )}
+              {unresolved.length > 0 && !editing && (
+                <span title="These tokens have no matching merge variable and will export literally." style={{ fontSize: 11, color: C.tanInk, background: C.tan, border: `1px solid ${C.tanLine}`, borderRadius: 6, padding: "1px 7px", fontWeight: 600 }}>
+                  ⚠ Unresolved: {unresolved.map((t) => `[[${t}]]`).join(", ")}
+                </span>
               )}
             </div>
             <div style={{ fontSize: 12, color: C.faint }}>Draft against: {libraryLabel}</div>

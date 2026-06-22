@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { C, STATUS_DOT, STATUS_LABEL } from "../../lib/theme.js";
-import { listEntries, listCategories, createEntry, updateEntry, deleteEntry } from "../../lib/db.js";
+import { listEntries, listCategories, createEntry, updateEntry, deleteEntry, listTags, createTag } from "../../lib/db.js";
 import { fileKind, readPdf, readDocx, readTextFile, fetchUrlContent } from "../../lib/importParsers.js";
 import { PageHeader, Button, Spinner, Empty, Modal, Field, Input, Select, StatusDot } from "../../components/ui.jsx";
+import TagPicker from "../../components/TagPicker.jsx";
 
 const STATUSES = ["never_reviewed", "unassigned", "assigned", "approved_with_edits", "approved_without_edits"];
 
@@ -21,12 +22,22 @@ export default function Category() {
   const [cat, setCat] = useState(null);
   const [err, setErr] = useState(null);
   const [adding, setAdding] = useState(false);
+  const [allTags, setAllTags] = useState([]);
+  const [tagFilter, setTagFilter] = useState([]); // tag names to filter the list by
 
+  function loadTags() { listTags().then(setAllTags).catch(() => {}); }
   function load() {
-    listEntries({ categoryId: id }).then(setEntries).catch((e) => setErr(e.message));
+    listEntries({ categoryId: id, tags: tagFilter }).then(setEntries).catch((e) => setErr(e.message));
     listCategories().then((cs) => setCat(cs.find((c) => c.id === id))).catch(() => {});
   }
-  useEffect(load, [id]);
+  useEffect(load, [id, tagFilter]);
+  useEffect(loadTags, []);
+
+  // Tags actually present on entries in this category, for the filter bar.
+  const tagsInView = Array.from(new Set((entries || []).flatMap((e) => e.tags || []))).sort();
+  function toggleFilter(name) {
+    setTagFilter((prev) => (prev.includes(name) ? prev.filter((t) => t !== name) : [...prev, name]));
+  }
 
   async function add(d) {
     try {
@@ -38,6 +49,7 @@ export default function Category() {
         file_type: d.file_type || null,
         file_size: d.file_size || null,
         source_url: d.source_url || null,
+        tags: d.tags || [],
         status: "never_reviewed",
       });
       setAdding(false);
@@ -49,18 +61,36 @@ export default function Category() {
     <div>
       <PageHeader
         title={cat?.name || "Category"}
-        subtitle={entries ? `${entries.length} ${entries.length === 1 ? "entry" : "entries"}` : ""}
+        subtitle={entries ? `${entries.length} ${entries.length === 1 ? "entry" : "entries"}${tagFilter.length ? ` · filtered by ${tagFilter.join(", ")}` : ""}` : ""}
         actions={<Button variant="primary" onClick={() => setAdding(true)}>+ Add Content</Button>}
       />
       {err && <div style={{ color: C.red, fontSize: 13, marginBottom: 12 }}>{err}</div>}
 
-      {entries == null ? <Spinner /> : entries.length === 0 ? (
-        <Empty title="No content in this category yet" hint="Paste text or upload a .pdf, .docx, .txt, or .md file to add knowledge here." />
-      ) : (
-        entries.map((e) => <EntryRow key={e.id} entry={e} onChanged={load} onError={setErr} />)
+      {(tagsInView.length > 0 || tagFilter.length > 0) && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
+          <span style={{ fontSize: 12, color: C.muted, fontWeight: 600 }}>Filter by tag:</span>
+          {Array.from(new Set([...tagsInView, ...tagFilter])).sort().map((name) => {
+            const active = tagFilter.includes(name);
+            return (
+              <button key={name} onClick={() => toggleFilter(name)} style={{
+                fontSize: 12, fontWeight: 600, padding: "4px 10px", borderRadius: 7, cursor: "pointer", fontFamily: "inherit",
+                border: `1px solid ${active ? C.blue : C.line}`, background: active ? C.blueSoft : "#fff", color: active ? C.blueInk : C.body,
+              }}>{name}</button>
+            );
+          })}
+          {tagFilter.length > 0 && (
+            <button onClick={() => setTagFilter([])} style={{ fontSize: 12, border: "none", background: "transparent", color: C.muted, cursor: "pointer", fontFamily: "inherit" }}>Clear</button>
+          )}
+        </div>
       )}
 
-      {adding && <AddModal onClose={() => setAdding(false)} onSave={add} onError={setErr} />}
+      {entries == null ? <Spinner /> : entries.length === 0 ? (
+        <Empty title={tagFilter.length ? "No entries match this tag" : "No content in this category yet"} hint={tagFilter.length ? "Try clearing the tag filter." : "Paste text or upload a .pdf, .docx, .txt, or .md file to add knowledge here."} />
+      ) : (
+        entries.map((e) => <EntryRow key={e.id} entry={e} allTags={allTags} onTagCreate={loadTags} onChanged={load} onError={setErr} />)
+      )}
+
+      {adding && <AddModal allTags={allTags} onTagCreate={loadTags} onClose={() => setAdding(false)} onSave={add} onError={setErr} />}
     </div>
   );
 }
@@ -71,14 +101,17 @@ const fmtSize = (n) => (n ? `${(n / 1024).toFixed(n > 1024 * 100 ? 0 : 1)} KB` :
 
 // Add content: paste text, upload a file, or import a web page by URL — all three
 // land as a titled block of knowledge content. No more question/answer fields.
-function AddModal({ onClose, onSave, onError }) {
+function AddModal({ allTags = [], onTagCreate, onClose, onSave, onError }) {
   const [mode, setMode] = useState("text"); // "text" | "file" | "url"
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
+  const [tags, setTags] = useState([]);
   const [file, setFile] = useState(null); // { file_type, file_size }
   const [url, setUrl] = useState("");
   const [sourceUrl, setSourceUrl] = useState(null); // set once a URL is fetched
   const [busy, setBusy] = useState(false);
+
+  async function createTagAndRefresh(n) { await createTag(n); onTagCreate?.(); }
 
   async function onFile(e) {
     const f = e.target.files?.[0];
@@ -109,9 +142,9 @@ function AddModal({ onClose, onSave, onError }) {
 
   function save() {
     if (!title.trim() || !content.trim()) return;
-    if (mode === "file" && file) onSave({ title, content, source_type: "file", file_type: file.file_type, file_size: file.file_size });
-    else if (mode === "url" && sourceUrl) onSave({ title, content, source_type: "url", file_type: "url", source_url: sourceUrl });
-    else onSave({ title, content, source_type: "text" });
+    if (mode === "file" && file) onSave({ title, content, tags, source_type: "file", file_type: file.file_type, file_size: file.file_size });
+    else if (mode === "url" && sourceUrl) onSave({ title, content, tags, source_type: "url", file_type: "url", source_url: sourceUrl });
+    else onSave({ title, content, tags, source_type: "text" });
   }
 
   return (
@@ -127,6 +160,8 @@ function AddModal({ onClose, onSave, onError }) {
       </div>
 
       <Field label="Title"><Input value={title} onChange={(e) => setTitle(e.target.value)} autoFocus placeholder="e.g. Data retention policy" /></Field>
+
+      <Field label="Tags"><TagPicker value={tags} onChange={setTags} allTags={allTags} onCreate={createTagAndRefresh} placeholder="Tag this entry (e.g. PII, SOC 2)…" /></Field>
 
       {mode === "text" && (
         <Field label="Content">
@@ -173,13 +208,15 @@ function AddModal({ onClose, onSave, onError }) {
   );
 }
 
-function EntryRow({ entry, onChanged, onError }) {
+function EntryRow({ entry, allTags = [], onTagCreate, onChanged, onError }) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(entry.title);
   const [content, setContent] = useState(entry.content || "");
+  const [tags, setTags] = useState(entry.tags || []);
 
+  async function createTagAndRefresh(n) { await createTag(n); onTagCreate?.(); }
   async function save() {
-    try { await updateEntry(entry.id, { title, content }); setEditing(false); onChanged(); } catch (e) { onError(e.message); }
+    try { await updateEntry(entry.id, { title, content, tags }); setEditing(false); onChanged(); } catch (e) { onError(e.message); }
   }
   async function setStatus(status) {
     try { await updateEntry(entry.id, { status, ...(status.startsWith("approved") ? { reviewed_at: new Date().toISOString() } : {}) }); onChanged(); } catch (e) { onError(e.message); }
@@ -200,9 +237,11 @@ function EntryRow({ entry, onChanged, onError }) {
           <Input value={title} onChange={(e) => setTitle(e.target.value)} style={{ marginBottom: 10 }} />
           <div style={{ fontSize: 12, color: C.muted, marginBottom: 6 }}>Content</div>
           <textarea value={content} onChange={(e) => setContent(e.target.value)} style={{ ...ta, borderColor: C.blueSoft }} />
-          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+          <div style={{ fontSize: 12, color: C.muted, margin: "10px 0 6px" }}>Tags</div>
+          <TagPicker value={tags} onChange={setTags} allTags={allTags} onCreate={createTagAndRefresh} />
+          <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
             <Button variant="primary" onClick={save}>Save</Button>
-            <Button onClick={() => { setTitle(entry.title); setContent(entry.content || ""); setEditing(false); }}>Cancel</Button>
+            <Button onClick={() => { setTitle(entry.title); setContent(entry.content || ""); setTags(entry.tags || []); setEditing(false); }}>Cancel</Button>
           </div>
         </div>
       ) : (
@@ -214,6 +253,13 @@ function EntryRow({ entry, onChanged, onError }) {
             </Select>
           </div>
           <div style={{ fontSize: 13.5, color: C.body, lineHeight: 1.7, whiteSpace: "pre-wrap" }}>{entry.content || <span style={{ color: C.faint, fontStyle: "italic" }}>No content yet</span>}</div>
+          {(entry.tags || []).length > 0 && (
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
+              {entry.tags.map((t) => (
+                <span key={t} style={{ display: "inline-flex", alignItems: "center", background: C.blueSoft, color: C.blueInk, border: `1px solid ${C.blueSoft}`, borderRadius: 7, padding: "2px 9px", fontSize: 11.5, fontWeight: 600 }}>{t}</span>
+              ))}
+            </div>
+          )}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 12, paddingTop: 10, borderTop: `1px solid ${C.line}` }}>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, color: C.faint }}>
               <StatusDot color={STATUS_DOT[entry.status]} /> {meta} · Updated {entry.updated_at?.slice(0, 10)}{entry.updater?.full_name ? ` · ${entry.updater.full_name}` : ""}
